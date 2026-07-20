@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escape Room — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0b14; --panel: #12121e; --border: rgba(232,230,227,0.08);
+      --fg: #e8e6e3; --fg-2: #a8a5a0; --fg-3: #6b6862;
+      --accent: #c9a227; --blood: #c0392b; --teal: #4a9a8c; --ok: #4a8c5f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--fg);
+      font-family: 'Inter', sans-serif; font-size: 14px; min-height: 100vh;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    aside {
+      width: 220px; padding: 24px 0; border-right: 1px solid var(--border);
+      background: #0d0d17; position: sticky; top: 0; height: 100vh;
+    }
+    aside h1 { font-size: 0.95rem; letter-spacing: 0.14em; text-transform: uppercase; padding: 0 24px 20px; color: var(--accent); }
+    aside nav button {
+      display: block; width: 100%; text-align: left; padding: 11px 24px;
+      background: none; border: none; border-left: 2px solid transparent;
+      color: var(--fg-2); font: inherit; cursor: pointer; letter-spacing: 0.04em;
+    }
+    aside nav button:hover { color: var(--fg); background: rgba(255,255,255,0.02); }
+    aside nav button.active { color: var(--accent); border-left-color: var(--accent); background: rgba(201,162,39,0.06); }
+    main { flex: 1; padding: 32px; max-width: 1200px; }
+    h2 { font-size: 1.3rem; font-weight: 600; margin-bottom: 20px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
+    }
+    .card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--fg-3); margin-bottom: 6px; }
+    .card .value { font-size: 1.7rem; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+    .card .value.gold { color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th { text-align: left; padding: 10px 14px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); border-bottom: 1px solid var(--border); }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--fg-2); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.015); }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.72rem; }
+    .pill.ok { background: rgba(74,140,95,0.15); color: #7fc98f; }
+    .pill.bad { background: rgba(192,57,43,0.15); color: #e8938a; }
+    .pill.ai { background: rgba(74,154,140,0.15); color: #7fc9bc; }
+    button.act {
+      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: none; color: var(--fg-2); cursor: pointer; font-size: 0.78rem;
+    }
+    button.act:hover { border-color: var(--accent); color: var(--fg); }
+    input[type="text"], input[type="password"] {
+      background: #0a0a12; border: 1px solid var(--border); color: var(--fg);
+      padding: 9px 14px; border-radius: 8px; font: inherit; width: 100%;
+    }
+    .row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 28px; }
+    .chart .bar { flex: 1; background: linear-gradient(180deg, var(--accent), #7a611a); border-radius: 3px 3px 0 0; min-height: 3px; position: relative; }
+    .chart .bar span { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-size: 0.62rem; color: var(--fg-3); white-space: nowrap; }
+    #login-view { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    #login-view .card { width: 340px; }
+    .pager { display: flex; gap: 8px; margin-top: 14px; align-items: center; color: var(--fg-3); font-size: 0.8rem; }
+    .err { color: #e8938a; font-size: 0.8rem; min-height: 1.2em; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div id="login-view">
+    <div class="card">
+      <h2 style="margin-bottom:16px">Admin Access</h2>
+      <div class="row"><input type="text" id="login-user" placeholder="Username" /></div>
+      <div class="row"><input type="password" id="login-pass" placeholder="Password" /></div>
+      <button class="act" style="width:100%;padding:10px" onclick="login()">Sign In</button>
+      <p class="err" id="login-err"></p>
+    </div>
+  </div>
+
+  <div class="layout" id="app-view" style="display:none">
+    <aside>
+      <h1>Escape Room</h1>
+      <nav id="nav">
+        <button data-view="dashboard" class="active">Dashboard</button>
+        <button data-view="users">Users</button>
+        <button data-view="rooms">Rooms</button>
+        <button data-view="puzzles">Puzzle Analytics</button>
+        <button data-view="leaderboard">Leaderboard</button>
+        <button data-view="ailogs">AI Logs</button>
+        <button data-view="events">Event Stream</button>
+      </nav>
+      <div style="padding:24px"><button class="act" onclick="logout()">Sign Out</button></div>
+    </aside>
+    <main id="main"></main>
+  </div>
+
+<script>
+const API = '/admin/api';
+let token = localStorage.getItem('admin_token') || '';
+
+async function req(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, ...(opts.headers||{}) },
+  });
+  if (res.status === 401 || res.status === 403) { logout(); throw new Error('auth'); }
+  return res.json();
+}
+
+async function login() {
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  const res = await fetch('/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('login-user').value,
+      password: document.getElementById('login-pass').value,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { err.textContent = data.error || 'Login failed'; return; }
+  if (data.user.role !== 'admin') { err.textContent = 'This account is not an admin.'; return; }
+  token = data.token;
+  localStorage.setItem('admin_token', token);
+  showApp();
+}
+
+function logout() {
+  localStorage.removeItem('admin_token');
+  token = '';
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('login-view').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'flex';
+  render('dashboard');
+}
+
+document.getElementById('nav').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-view]');
+  if (!btn) return;
+  document.querySelectorAll('#nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render(btn.dataset.view);
+});
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const main = () => document.getElementById('main');
+
+async function render(view) {
+  main().innerHTML = '<p style="color:var(--fg-3)">Loading…</p>';
+  try {
+    if (view === 'dashboard') await renderDashboard();
+    else if (view === 'users') await renderUsers(1);
+    else if (view === 'rooms') await renderRooms();
+    else if (view === 'puzzles') await renderPuzzles();
+    else if (view === 'leaderboard') await renderLeaderboard();
+    else if (view === 'ailogs') await renderAILogs(1);
+    else if (view === 'events') await renderEvents(1);
+  } catch (e) { if (e.message !== 'auth') main().innerHTML = '<p class="err">Failed to load.</p>'; }
+}
+
+async function renderDashboard() {
+  const s = await req('/stats');
+  const maxDay = Math.max(1, ...s.events_daily.map(d => d.count));
+  main().innerHTML = `
+    <h2>Dashboard</h2>
+    <div class="cards">
+      <div class="card"><div class="label">Total Players</div><div class="value gold">${s.total_users}</div></div>
+      <div class="card"><div class="label">New This Week</div><div class="value">${s.new_users_7d}</div></div>
+      <div class="card"><div class="label">Game Saves</div><div class="value">${s.total_saves}</div></div>
+      <div class="card"><div class="label">Puzzles Solved</div><div class="value gold">${s.puzzles_solved}</div></div>
+      <div class="card"><div class="label">Solve Rate</div><div class="value">${Math.round(s.solve_rate*100)}%</div></div>
+      <div class="card"><div class="label">AI Calls</div><div class="value">${s.ai_calls}</div></div>
+      <div class="card"><div class="label">OpenAI Share</div><div class="value">${Math.round(s.ai_openai_share*100)}%</div></div>
+      <div class="card"><div class="label">Events (7d)</div><div class="value">${s.events_7d}</div></div>
+    </div>
+    <h2 style="font-size:1rem">Activity — last 7 days</h2>
+    <div class="chart">
+      ${s.events_daily.map(d => `<div class="bar" style="height:${(d.count/maxDay)*100}%"><span>${esc(d.day.slice(5))}</span></div>`).join('') || '<p style="color:var(--fg-3)">No events yet.</p>'}
+    </div>`;
+}
+
+async function renderUsers(page, q = '') {
+  const data = await req(`/users?page=${page}&q=${encodeURIComponent(q)}`);
+  main().innerHTML = `
+    <h2>Users</h2>
+    <div class="row"><input type="text" id="user-q" placeholder="Search username or email…" value="${esc(q)}" />
+      <button class="act" onclick="renderUsers(1, document.getElementById('user-q').value)">Search</button></div>
+    <table><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Solved</th><th>Skill</th><th>Status</th><th></th></tr></thead>
+    <tbody>${data.users.map(u => `
+      <tr><td style="color:var(--fg)">${esc(u.username)}</td><td>${esc(u.email)}</td>
+      <td>${u.role === 'admin' ? '<span class="pill ai">admin</span>' : 'player'}</td>
+      <td>${u.puzzles_solved}</td><td>${u.skill_rating}</td>
+      <td>${u.is_active ? '<span class="pill ok">active</span>' : '<span class="pill bad">disabled</span>'}</td>
+      <td>${u.role !== 'admin' ? `<button class="act" onclick="toggleUser(${u.id})">${u.is_active ? 'Disable' : 'Enable'}</button>` : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="pager">Page ${data.page} / ${data.pages || 1}
+      ${data.page > 1 ? `<button class="act" onclick="renderUsers(${data.page-1})">Prev</button>` : ''}
+      ${data.page < data.pages ? `<button class="act" onclick="renderUsers(${data.page+1})">Next</button>` : ''}</div>`;
+}
+
+async function toggleUser(id) {
+  await req(`/users/${id}/toggle`, { method: 'POST' });
+  renderUsers(1);
+}
+
+async function renderRooms() {
+  const data = await req('/rooms');
+  main().innerHTML = `
+    <h2>Rooms</h2>
+    <table><thead><tr><th>#</th><th>Room</th><th>Theme</th><th>Difficulty</th><th>Status</th><th></th></tr></thead>
+    <tbody>${data.rooms.map(r => `
+      <tr><td>${r.order_index + 1}</td><td style="color:var(--fg)">${esc(r.name)}</td><td>${esc(r.theme)}</td>
+      <td><input type="text" style="width:64px" value="${r.base_difficulty}" id="diff-${esc(r.room_key)}" /></td>
+      <td>${r.enabled ? '<span class="pill ok">enabled</span>' : '<span class="pill bad">disabled</span>'}</td>
+      <td><button class="act" onclick="saveRoom('${esc(r.room_key)}', ${r.enabled})">Save</button>
+          <button class="act" onclick="toggleRoom('${esc(r.room_key)}', ${!r.enabled})">${r.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function saveRoom(key, enabled) {
+  const diff = parseFloat(document.getElementById('diff-' + key).value);
+  await req('/rooms/' + key, { method: 'POST', body: JSON.stringify({ base_difficulty: diff, enabled }) });
+  renderRooms();
+}
+async function toggleRoom(key, enabled) {
+  await req('/rooms/' + key, { method: 'POST', body: JSON.stringify({ enabled }) });
+  renderRooms();
+}
+
+async function renderPuzzles() {
+  const data = await req('/puzzle-analytics');
+  main().innerHTML = `
+    <h2>Puzzle Analytics</h2>
+    <table><thead><tr><th>Room</th><th>Type</th><th>Attempts</th><th>Solved</th><th>Solve %</th><th>Avg Time</th><th>Avg Hints</th></tr></thead>
+    <tbody>${data.puzzles.map(p => `
+      <tr><td style="color:var(--fg)">${esc(p.room_id)}</td><td>${esc(p.puzzle_type)}</td>
+      <td>${p.attempts}</td><td>${p.solved}</td>
+      <td>${Math.round((p.solved / Math.max(1, p.attempts)) * 100)}%</td>
+      <td>${p.avg_time_s}s</td><td>${p.avg_hints}</td></tr>`).join('') || '<tr><td colspan="7" style="color:var(--fg-3)">No puzzle data yet.</td></tr>'}
+    </tbody></table>`;
+}
+
+async function renderLeaderboard() {
+  const data = await req('/leaderboard');
+  main().innerHTML = `
+    <h2>Leaderboard</h2>
+    <table><thead><tr><th>#</th><th>Player</th><th>Score</th><th>Time</th><th>Rooms</th><th>Hints</th><th>Ending</th><th>Date</th></tr></thead>
+    <tbody>${data.leaderboard.map((e, i) => `
+      <tr><td>${i+1}</td><td style="color:var(--fg)">${esc(e.username)}</td><td style="color:var(--accent)">${e.score}</td>
+      <td>${Math.floor(e.completion_time_s/60)}m</td><td>${e.rooms_cleared}/10</td><td>${e.hints_used}</td>
+      <td>${esc(e.ending)}</td><td>${e.date ? e.date.slice(0,10) : ''}</td></tr>`).join('') || '<tr><td colspan="8" style="color:var(--fg-3)">No runs yet.</td></tr>'}
+    </tbody></table>`;
+}
+
+async function renderAILogs(page) {
+  const data = await req('/ai-logs?page=' + page);
+  main().innerHTML = `
+    <h2>AI Logs</h2>
+    <table><thead><tr><th>When</th><th>Kind</th><th>Provider</th><th>Prompt</th><th>Latency</th><th>Status</th></tr></thead>
+    <tbody>${data.logs.map(l => `
+      <tr><td>${l.created_at ? l.created_at.slice(0,19).replace('T',' ') : ''}</td>
+      <td>${esc(l.kind)}</td>
+      <td>${l.provider === 'openai' ? '<span class="pill ai">openai</span>' : '<span class="pill">fallback</span>'}</td>
+      <td>${esc(l.prompt_summary)}</td><td>${l.latency_ms}ms</td>
+      <td>${l.success ? '<span class="pill ok">ok</span>' : `<span class="pill bad" title="${esc(l.error)}">error</span>`}</td></tr>`).join('') || '<tr><td colspan="6" style="color:var(--fg-3)">No AI calls yet.</td></tr>'}
+    </tbody></table>
+    <div class="pager">Page ${data.page} / ${data.pages || 1}
+      ${data.page > 1 ? `<button class="act" onclick="renderAILogs(${data.page-1})">Prev</button>` : ''}
+      ${data.page < data.pages ? `<button class="act" onclick="renderAILogs(${data.page+1})">Next</button>` : ''}</div>`;
+}
+
+async function renderEvents(page) {
+  const data = await req('/events?page=' + page);
+  main().innerHTML = `
+    <h2>Event Stream</h2>
+    <table><thead><tr><th>When</th><th>Event</th><th>User</th><th>Room</th><th>Payload</th></tr></thead>
+    <tbody>${data.events.map(e => `
+      <tr><td>${e.created_at ? e.created_at.slice(0,19).replace('T',' ') : ''}</td>
+      <td style="color:var(--fg)">${esc(e.event_type)}</td><td>${e.user_id ?? '—'}</td>
+      <td>${esc(e.room_id ?? '—')}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.72rem">${esc((e.payload_json||'').slice(0,80))}</td></tr>`).join('') || '<tr><td colspan="5" style="color:var(--fg-3)">No events yet.</td></tr>'}
+    </tbody></table>
+    <div class="pager">Page ${data.page} / ${data.pages || 1}
+      ${data.page > 1 ? `<button class="act" onclick="renderEvents(${data.page-1})">Prev</button>` : ''}
+      ${data.page < data.pages ? `<button class="act" onclick="renderEvents(${data.page+1})">Next</button>` : ''}</div>`;
+}
+
+// boot
+if (token) showApp(); else logout();
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>

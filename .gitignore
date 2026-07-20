@@ -1,0 +1,47 @@
+# =============================================================
+#  AI POWERED ESCAPE ROOM — .gitignore
+# =============================================================
+
+# --- Node ---
+node_modules/
+dist/
+.vite/
+*.local
+
+# --- Python ---
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+instance/
+*.pem
+*.key
+
+# --- Database ---
+*.db
+*.sqlite3
+server/escape_room.db
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Logs ---
+logs/
+*.log
+
+# --- External repos (reference only) ---
+ComfyUI/
+
+# --- Build artifacts ---
+client/dist/
+coverage/
