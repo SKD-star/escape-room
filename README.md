@@ -101,6 +101,8 @@ docs/                 Architecture, API docs, DB schema, deployment, report
 
 ## 📚 Documentation
 
+- **[🎮 Walkthrough — clear all 10 levels](WALKTHROUGH.md)** *(spoilers!)*
+- **[💻 Setup on another laptop](SETUP_NEW_LAPTOP.md)** — from-zero install guide
 - [Architecture](docs/ARCHITECTURE.md)
 - [Installation Guide](docs/INSTALLATION.md)
 - [API Documentation](docs/API.md)
