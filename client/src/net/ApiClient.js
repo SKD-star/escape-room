@@ -29,8 +29,21 @@ class ApiClient {
         headers,
         body: body != null ? JSON.stringify(body) : undefined,
       });
+      // On a static host (no backend), /api/* often resolves to the SPA
+      // fallback (index.html, HTTP 200) or an HTML 404 page. Treat any
+      // non-JSON response as "offline" so the local fallbacks engage instead
+      // of consuming a bogus empty body as a success.
+      const ctype = res.headers.get('content-type') || '';
+      if (!ctype.includes('application/json')) {
+        this.online = false;
+        return { ok: false, status: 0, error: 'offline' };
+      }
       this.online = true;
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => null);
+      if (data == null) {
+        this.online = false;
+        return { ok: false, status: 0, error: 'offline' };
+      }
       if (!res.ok) {
         return { ok: false, status: res.status, error: data.error || 'Request failed' };
       }
@@ -88,6 +101,7 @@ class ApiClient {
 
   // -- game data ----------------------------------------------------------
 
+  getRooms() { return this.request('GET', '/rooms', null, { auth: false }); }
   getLeaderboard() { return this.request('GET', '/leaderboard', null, { auth: false }); }
   submitRun(run) { return this.request('POST', '/leaderboard', run); }
   getAchievements() { return this.request('GET', '/achievements'); }

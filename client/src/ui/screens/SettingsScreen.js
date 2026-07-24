@@ -25,13 +25,22 @@ const TABS = {
     { key: 'headBob', name: 'Head Bob', desc: 'Camera sway while walking', type: 'toggle' },
     { key: 'subtitles', name: 'Subtitles', desc: 'Show spoken lines as text', type: 'toggle' },
     { key: 'hints', name: 'AI Hints', desc: 'Allow requesting hints', type: 'toggle' },
+    { key: 'sanityFx', name: 'Sanity Effects', desc: 'Fear-driven visual and audio distortion', type: 'toggle' },
+    { key: 'hauntEnabled', name: 'The Presence', desc: 'The entity that stalks between puzzles', type: 'toggle' },
+    { key: 'soundCaptions', name: 'Sound Captions', desc: 'Caption important world sounds (accessibility)', type: 'toggle' },
+    { key: 'showCompass', name: 'Compass', desc: 'Direction tape at the top of the screen', type: 'toggle' },
+    { key: 'showTimer', name: 'Speedrun Timer', desc: 'Run clock with per-room PB splits', type: 'toggle' },
+    { key: 'countdownTimer', name: 'Room Countdown', desc: 'Per-room time limit on Normal & Nightmare', type: 'toggle' },
+    { key: 'gamepad', name: 'Controller Support', desc: 'Use a connected gamepad', type: 'toggle' },
   ],
 };
 
 const KEYBINDS = [
-  ['W A S D', 'Move'], ['Mouse', 'Look'], ['Shift', 'Sprint'], ['C', 'Crouch'],
-  ['Space', 'Jump'], ['E', 'Interact'], ['R', 'Rotate held item'], ['F', 'Throw'],
-  ['Tab', 'Inventory'], ['Q', 'Objectives'], ['Esc', 'Pause'],
+  ['W A S D', 'Move'], ['Mouse', 'Look'], ['RMB (hold)', 'Focus zoom'],
+  ['Shift', 'Sprint'], ['C', 'Crouch'],
+  ['Space', 'Jump'], ['E', 'Interact'], ['R', 'Rotate held item'], ['F', 'Flashlight / Throw held item'],
+  ['Tab', 'Inventory'], ['J', 'Journal'], ['P', 'Photo mode'], ['Q', 'Objectives'],
+  ['F5', 'Quick save'], ['F9', 'Quick load'], ['Esc', 'Pause'],
 ];
 
 export class SettingsScreen {

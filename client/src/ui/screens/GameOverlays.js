@@ -167,24 +167,63 @@ export class IntroScreen {
     this.el = html`
       <div id="intro-screen" style="background:#000">
         <div class="intro-line" style="font-family:var(--font-display);font-size:clamp(1.2rem,3vw,2rem);letter-spacing:0.1em;text-align:center;max-width:820px;padding:0 24px;line-height:2"></div>
-        <button class="btn" style="position:absolute;bottom:32px;right:32px" data-action="skip">Skip</button>
+        <div class="intro-dots" style="position:absolute;bottom:44px;left:50%;transform:translateX(-50%);display:flex;gap:10px"></div>
+        <p class="label" style="position:absolute;bottom:32px;left:32px">Click — next line · Esc — skip</p>
+        <button class="btn" style="position:absolute;bottom:32px;right:32px" data-action="skip">Skip ▸</button>
       </div>`;
     this.lineEl = this.el.querySelector('.intro-line');
-    this.el.querySelector('[data-action="skip"]').addEventListener('click', () => this.finish());
+    this.dotsEl = this.el.querySelector('.intro-dots');
+    this.el.querySelector('[data-action="skip"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.finish();
+    });
+    // click anywhere → advance to the next line immediately
+    this.el.addEventListener('click', () => { this.advance = true; });
+    document.addEventListener('keydown', (e) => {
+      if (!this.playing) return;
+      // consume the key so it can't also trigger pause/inventory handlers
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (e.code === 'Escape') this.finish();
+      else this.advance = true; // any key advances a line
+    }, true); // capture phase: runs before the Game's own key handlers
     screens.register('intro', this.el);
+  }
+
+  renderDots(total, current) {
+    this.dotsEl.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      this.dotsEl.appendChild(html`<span style="width:8px;height:8px;border-radius:50%;background:${i <= current ? 'var(--accent)' : 'rgba(232,230,227,0.18)'};transition:background 300ms"></span>`);
+    }
+  }
+
+  /** Wait until ms elapsed OR the player asked to advance/skip. */
+  wait(ms) {
+    return new Promise((resolve) => {
+      const start = performance.now();
+      const tick = () => {
+        if (!this.playing || this.advance || performance.now() - start >= ms) return resolve();
+        setTimeout(tick, 80); // setTimeout (not rAF) — keeps running in background tabs
+      };
+      tick();
+    });
   }
 
   async play(lines) {
     screens.show('intro');
     this.playing = true;
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
       if (!this.playing) return;
-      this.lineEl.textContent = line;
-      await gsap.timeline()
-        .fromTo(this.lineEl, { opacity: 0, filter: 'blur(6px)' },
-          { opacity: 1, filter: 'blur(0px)', duration: 1.6, ease: 'power2.out' })
-        .to(this.lineEl, { opacity: 0, duration: 1.2, ease: 'power2.in' }, '+=2.4')
-        .then(() => {});
+      this.advance = false;
+      this.renderDots(lines.length, i);
+      this.lineEl.textContent = lines[i];
+      gsap.killTweensOf(this.lineEl);
+      gsap.fromTo(this.lineEl, { opacity: 0, filter: 'blur(6px)' },
+        { opacity: 1, filter: 'blur(0px)', duration: 1.0, ease: 'power2.out' });
+      await this.wait(4200); // hold; click/key cuts it short
+      if (!this.playing) return;
+      gsap.to(this.lineEl, { opacity: 0, duration: 0.5, ease: 'power2.in' });
+      await this.wait(500);
     }
     this.finish();
   }
@@ -240,7 +279,7 @@ export class EndingScreen {
     this.el.querySelector('.ending-text').textContent = ending.text;
     this.el.querySelector('.ending-stats').innerHTML = `
       <span>Time — ${formatTime(stats.playtime_s)}</span>
-      <span>Rooms — ${stats.rooms_cleared}/10</span>
+      <span>Rooms — ${stats.rooms_cleared}/${stats.total ?? 10}</span>
       <span>Puzzles — ${stats.puzzles_solved}</span>
       <span>Hints — ${stats.hints_used}</span>`;
     screens.show('ending');

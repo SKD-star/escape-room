@@ -79,12 +79,30 @@ function normalFromCanvas(srcCanvas, strength = 1.4) {
   return out;
 }
 
+/** Derive a roughness map from luminance: crevices rough, highlights glossier. */
+function roughnessFromCanvas(srcCanvas, base = 0.85, variance = 0.3) {
+  const size = srcCanvas.width;
+  const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+  const src = srcCtx.getImageData(0, 0, size, size).data;
+  const [out, outCtx] = makeCanvas(size);
+  const img = outCtx.createImageData(size, size);
+  for (let i = 0; i < src.length; i += 4) {
+    const lum = (src[i] + src[i + 1] + src[i + 2]) / 765;
+    // darker areas (grime, cracks) → rougher; bright worn areas → smoother
+    const r = Math.max(0, Math.min(1, base + (0.5 - lum) * variance)) * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = r;
+    img.data[i + 3] = 255;
+  }
+  outCtx.putImageData(img, 0, 0);
+  return out;
+}
+
 function toTexture(canvas, { srgb = true, repeat = 1 } = {}) {
   const tex = new THREE.CanvasTexture(canvas);
   if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   return tex;
 }
 
@@ -283,7 +301,11 @@ export function createMaterial(kind, opts = {}) {
     map: toTexture(canvas, { repeat }),
     normalMap: toTexture(normalFromCanvas(canvas, opts.normalStrength ?? 1.4),
       { srgb: false, repeat }),
-    roughness: opts.roughness ?? defaults.roughness,
+    roughnessMap: toTexture(
+      roughnessFromCanvas(canvas, opts.roughness ?? defaults.roughness, 0.35),
+      { srgb: false, repeat },
+    ),
+    roughness: 1, // modulated by the roughnessMap
     metalness: opts.metalness ?? defaults.metalness,
   });
   cache.set(key, material);

@@ -11,7 +11,7 @@ import { Engine } from '../core/Engine.js';
 import { bus, Events } from '../core/EventBus.js';
 import { createMaterial } from './materials/MaterialLibrary.js';
 import {
-  createCandle, createDoor, createNote, createKey, createTorch,
+  createBattery, createCandle, createDoor, createNote, createKey, createTorch,
 } from './props/PropFactory.js';
 import { DustMotes, GroundFog } from './particles/ParticleSystems.js';
 
@@ -41,7 +41,59 @@ export class BaseRoom {
 
   build() {
     this.buildRoom();
+    this.placeBattery();
+    this.addObjectiveMarkers();
     this.engine.scene.add(this.group);
+  }
+
+  /**
+   * Floating glowing markers so targets are always findable:
+   *  - gold diamond above the puzzle anchor ("solve me")
+   *  - green diamond above the exit door once unlocked ("go here")
+   * Both bob/spin in update(); the exit marker starts hidden.
+   */
+  addObjectiveMarkers() {
+    const makeMarker = (color) => {
+      const group = new THREE.Group();
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.09),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }),
+      );
+      const halo = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.14),
+        new THREE.MeshBasicMaterial({
+          color, transparent: true, opacity: 0.25, depthWrite: false,
+        }),
+      );
+      const light = new THREE.PointLight(color, 1.6, 3, 2);
+      group.add(core, halo, light);
+      group.userData.core = core;
+      group.userData.halo = halo;
+      return group;
+    };
+
+    if (this.puzzleAnchor) {
+      const box = new THREE.Box3().setFromObject(this.puzzleAnchor);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      // generous invisible hit volume — puzzle anchors must be easy to aim at
+      const proxy = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.max(size.x, size.y, size.z) / 2 + 0.3, 8, 8),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      this.puzzleAnchor.worldToLocal(proxy.position.copy(center));
+      this.puzzleAnchor.add(proxy);
+
+      this.puzzleMarker = makeMarker(0xf0c040);
+      this.puzzleMarker.position.set(center.x, box.max.y + 0.45, center.z);
+      this.group.add(this.puzzleMarker);
+    }
+    if (this.exitDoor) {
+      this.exitMarker = makeMarker(0x40e080);
+      this.exitMarker.position.copy(this.exitDoor.position).add(new THREE.Vector3(0, 2.6, 0.3));
+      this.exitMarker.visible = false;
+      this.group.add(this.exitMarker);
+    }
   }
 
   /** Override in subclasses. */
@@ -59,6 +111,20 @@ export class BaseRoom {
       if (flame) {
         flame.scale.setScalar(0.9 + Math.sin(t * 12 + holder.id) * 0.12);
       }
+    }
+    // Objective markers: bob + spin + pulse, fading out as you approach
+    const camPos = this.engine.camera.position;
+    for (const marker of [this.puzzleMarker, this.exitMarker]) {
+      if (!marker?.visible) continue;
+      marker.position.y += Math.sin(t * 2.2) * 0.0018;
+      marker.rotation.y = t * 1.4;
+      const pulse = 0.85 + Math.sin(t * 3.1) * 0.2;
+      // fade: full at 5m+, gone under 2m (you're there — stop shouting)
+      const dist = marker.position.distanceTo(camPos);
+      const fade = THREE.MathUtils.clamp((dist - 2) / 3, 0, 1);
+      marker.userData.core.material.opacity = 0.9 * pulse * fade;
+      marker.userData.halo.material.opacity = 0.25 * fade;
+      marker.userData.halo.scale.setScalar(1 + Math.sin(t * 3.1) * 0.18);
     }
     for (const u of this.updatables) u.update(dt, t);
   }
@@ -187,11 +253,14 @@ export class BaseRoom {
   /** Scene fog + background tint for atmosphere. */
   setAtmosphere(bgColor, fogColor, fogDensity = 0.055, ambient = 0x1c1a24, ambientIntensity = 0.35) {
     this.engine.scene.background = new THREE.Color(bgColor);
-    this.engine.scene.fog = new THREE.FogExp2(fogColor, fogDensity);
-    const amb = new THREE.AmbientLight(ambient, ambientIntensity + 0.25);
+    // Halve the requested fog density: rooms are small, dense fog just
+    // turns the far wall into mud.
+    this.engine.scene.fog = new THREE.FogExp2(fogColor, fogDensity * 0.55);
+    const amb = new THREE.AmbientLight(ambient, ambientIntensity + 0.85);
     this.group.add(amb);
-    // Soft hemisphere fill keeps silhouettes readable in the darkest corners
-    const hemi = new THREE.HemisphereLight(0x2a2c38, 0x0c0a08, 0.4);
+    // Strong hemisphere fill keeps the whole room readable while candles
+    // and torches still provide the warm mood highlights.
+    const hemi = new THREE.HemisphereLight(0x4a5068, 0x241c12, 1.1);
     this.group.add(hemi);
   }
 
@@ -231,9 +300,12 @@ export class BaseRoom {
     if (this.exitDoor) {
       this.exitDoor.userData.interactable.label = 'Open the way forward';
     }
+    // marker handoff: puzzle done → guide to the exit
+    if (this.puzzleMarker) this.puzzleMarker.visible = false;
+    if (this.exitMarker) this.exitMarker.visible = true;
     bus.emit(Events.PLAY_SOUND, { name: 'unlock' });
     bus.emit(Events.TOAST, { text: 'Something heavy releases inside the exit door.' });
-    bus.emit(Events.OBJECTIVE_CHANGED, 'Escape through the unsealed door.');
+    bus.emit(Events.OBJECTIVE_CHANGED, 'Escape through the unsealed door — follow the green light.');
   }
 
   openExit() {
@@ -262,6 +334,7 @@ export class BaseRoom {
     const note = createNote();
     note.position.set(x, y, z);
     note.rotation.z = rotY;
+    this.addHitProxy(note, 0.3, 0);
     this.group.add(note);
     note.userData.interactable = {
       label: 'Read note',
@@ -271,11 +344,56 @@ export class BaseRoom {
     return note;
   }
 
+  /**
+   * Hidden battery cell — one per room, tucked into a corner picked by a
+   * deterministic hash of the room key (same spot every run, findable in
+   * guides). Restores 45% charge on pickup.
+   */
+  placeBattery() {
+    let h = 0;
+    for (const c of this.definition.key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const corners = [
+      [this.size.width / 2 - 0.7, this.size.depth / 2 - 0.7],
+      [-this.size.width / 2 + 0.7, this.size.depth / 2 - 0.7],
+      [this.size.width / 2 - 0.7, -this.size.depth / 2 + 0.7],
+      [-this.size.width / 2 + 0.7, -this.size.depth / 2 + 0.7],
+    ];
+    const [x, z] = corners[h % corners.length];
+    const battery = createBattery();
+    battery.position.set(x, 0, z);
+    battery.rotation.z = Math.PI / 2;
+    battery.rotation.y = (h % 7) * 0.9;
+    this.addHitProxy(battery, 0.35, 0.05);
+    this.group.add(battery);
+    this.makeInteractable(battery, 'Take the battery', (obj) => {
+      this.group.remove(obj);
+      this.interactions.unregister(obj);
+      bus.emit('battery:pickup', 45);
+      bus.emit(Events.TOAST, { text: 'A battery, still warm. Warm from what?' });
+    });
+  }
+
+  /** Invisible sphere that makes small pickups easy to aim at. */
+  addHitProxy(object, radius = 0.35, y = 0.1) {
+    const proxy = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 8, 8),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    proxy.position.y = y;
+    object.add(proxy);
+    return object;
+  }
+
   /** Collectible key item. */
   placeKeyItem(x, y, z, itemId, itemName, icon = '🗝') {
     const key = createKey();
     key.position.set(x, y, z);
     key.rotation.x = -Math.PI / 2.2;
+    this.addHitProxy(key, 0.4, 0);
+    // soft gold shimmer so collectibles catch the eye
+    const glow = new THREE.PointLight(0xd8b040, 0.8, 1.6, 2);
+    glow.position.y = 0.15;
+    key.add(glow);
     this.group.add(key);
     key.userData.interactable = {
       label: `Take ${itemName}`,

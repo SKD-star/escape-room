@@ -7,7 +7,7 @@ from flask import Blueprint, g, jsonify, request
 from extensions import db
 from models import (
     AnalyticsEvent, Achievement, GameSave, LeaderboardEntry,
-    PuzzleRecord, UserAchievement, UserSetting,
+    PuzzleRecord, RoomMeta, UserAchievement, UserSetting,
 )
 from services.difficulty import update_skill_rating
 from .security import auth_optional, auth_required, rate_limit
@@ -19,6 +19,30 @@ MAX_STATE_BYTES = 256 * 1024  # save-state payload cap
 
 def _json() -> dict:
     return request.get_json(silent=True) or {}
+
+
+# ---------------------------------------------------------------------------
+# Rooms — the playable campaign, ordered and filtered by the admin.
+# Public (guests play too). The client falls back to its built-in list offline.
+# ---------------------------------------------------------------------------
+
+@bp.get("/rooms")
+@auth_optional
+def rooms():
+    rows = (
+        RoomMeta.query.filter_by(enabled=True)
+        .order_by(RoomMeta.order_index, RoomMeta.id)
+        .all()
+    )
+    return jsonify({"rooms": [
+        {
+            "key": r.room_key,
+            "name": r.name,
+            "theme": r.theme,
+            "order_index": r.order_index,
+            "story": r.story,
+        } for r in rows
+    ]})
 
 
 # ---------------------------------------------------------------------------
@@ -105,8 +129,11 @@ def submit_run():
     except (KeyError, ValueError, TypeError):
         return jsonify({"error": "Invalid run payload"}), 400
 
-    # Score: room + puzzle progress minus time & hint penalties
-    score = max(0, rooms * 1000 + puzzles * 250 - time_s // 6 - hints * 100)
+    # Score: room + puzzle progress minus time & hint penalties, scaled by
+    # the difficulty mode played (server-side whitelist, client can't forge).
+    _DIFF_MULT = {"story": 0.75, "normal": 1.0, "nightmare": 1.5}
+    mult = _DIFF_MULT.get(str(data.get("difficulty", "normal")), 1.0)
+    score = max(0, int((rooms * 1000 + puzzles * 250 - time_s // 6 - hints * 100) * mult))
     entry = LeaderboardEntry(
         user_id=g.user.id,
         username=g.user.username,

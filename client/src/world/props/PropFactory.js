@@ -348,6 +348,22 @@ export function createKey() {
   return group;
 }
 
+/** Flashlight battery cell — collectible; faint glow so it can be spotted. */
+export function createBattery() {
+  const group = new THREE.Group();
+  const body = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 10),
+    plainMaterial(0x3a4045, { metalness: 0.7, roughness: 0.35 }));
+  body.position.y = 0.05;
+  const stripe = mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.03, 10),
+    glowMaterial(0xd8b040, 0.5));
+  stripe.position.y = 0.075;
+  const cap = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.012, 8),
+    plainMaterial(0x8a8f94, { metalness: 0.9, roughness: 0.3 }));
+  cap.position.y = 0.106;
+  group.add(body, stripe, cap);
+  return group;
+}
+
 /** Ghost — translucent hooded figure that drifts; userData.animate(t). */
 export function createGhost() {
   const group = new THREE.Group();
@@ -368,6 +384,13 @@ export function createGhost() {
   const light = new THREE.PointLight(0x86b8cc, 1.2, 5, 2);
   light.position.y = 1.3;
   group.add(light);
+  // generous invisible hit capsule — ghosts are thin, make them easy to address
+  const hit = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.5, 1.2, 4, 8),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  hit.position.y = 0.95;
+  group.add(hit);
   group.userData.animate = (t) => {
     group.position.y = Math.sin(t * 0.8) * 0.15;
     mat.opacity = 0.1 + Math.abs(Math.sin(t * 0.5)) * 0.12;

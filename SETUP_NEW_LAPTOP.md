@@ -45,7 +45,6 @@ cd escape-room
    **BUT SKIP these folders** (they are huge and will be regenerated):
    - `node_modules/`  ← 400+ MB, do NOT copy
    - `venv/`          ← do NOT copy (Python venvs don't survive moving)
-   - `ComfyUI/`       ← not part of the game, skip
    - `client/dist/`   ← optional build output, skip
 2. Paste the folder anywhere on the new laptop (e.g. `Desktop\escape-room`).
 3. Open a terminal **inside that folder**:
@@ -132,7 +131,7 @@ npm run create:admin  # creates the admin account (asks you for a password, min 
 You should see:
 ```
 [OK] Database ready: sqlite:///.../server/escape_room.db
-[OK] Seeded 10 rooms, 12 achievements
+[OK] Seeded 10 rooms, 13 achievements, 5 bank puzzles
 [OK] Admin user 'admin' created
 ```
 
@@ -148,9 +147,10 @@ npm run server
 ```
 Leave it running. You'll see `Running on http://127.0.0.1:5000`.
 
-> **Note (macOS/Linux):** the `server` script in package.json uses the Windows
-> venv path. If it fails, run the server directly instead:
-> `venv/bin/python server/app.py`
+> The `npm run …` Python scripts (`server`, `setup:db`, `seed`, `create:admin`)
+> auto-detect the venv interpreter and work on Windows, macOS and Linux.
+> One-command alternative: **`npm start`** launches the backend and the game
+> together in a single terminal.
 
 **Terminal 2 — the game:**
 ```bash
@@ -181,6 +181,7 @@ Click **New Game** and play. 🗝
 | Page loads but "WebGL 2 Required" | Use Chrome/Edge/Firefox; enable hardware acceleration in browser settings |
 | Menu clicks do nothing | Hard-refresh the page: `Ctrl+Shift+R` |
 | Game works but login/leaderboard fail | Terminal 1 (backend) isn't running — the game still works offline |
+| `'venv' is not recognized` / admin page won't load | The backend didn't start. Run `npm run server` (or `npm start`) in its own terminal, then open http://localhost:5000/admin/ |
 | `pip install` fails on bcrypt | `venv\Scripts\python -m pip install --upgrade pip` then retry Step 3 |
 | Antivirus blocks something | Allow Node.js and Python in your antivirus/firewall (local-only servers) |
 

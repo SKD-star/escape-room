@@ -15,21 +15,31 @@ export class MainMenu {
     this.handlers = handlers;
     this.el = html`
       <div id="main-menu" class="backdrop">
-        <h1 class="title-hero">AI Powered<br /><span class="accent">Escape Room</span></h1>
-        <p class="subtitle" style="margin-top:12px">Ten rooms · One way out</p>
-        <nav class="menu-layout" aria-label="Main menu">
-          <button class="btn btn-menu" data-action="new">New Game</button>
-          <button class="btn btn-menu" data-action="continue">Continue</button>
-          <button class="btn btn-menu" data-action="load">Load Game</button>
-          <button class="btn btn-menu" data-action="leaderboard">Leaderboard</button>
-          <button class="btn btn-menu" data-action="achievements">Achievements</button>
-          <button class="btn btn-menu" data-action="settings">Settings</button>
-          <button class="btn btn-menu" data-action="credits">Credits</button>
-          <button class="btn btn-menu" data-action="account">Sign In</button>
-        </nav>
-        <div class="menu-footer">
-          <span>v${GAME_VERSION} — Final Year Project</span>
-          <span class="account-status"></span>
+        <div class="menu-shell">
+          <header class="menu-head">
+            <h1 class="title-hero">AI Powered<br /><span class="accent">Escape Room</span></h1>
+            <p class="subtitle">Ten rooms · One way out</p>
+          </header>
+          <nav class="menu-layout" aria-label="Main menu">
+            <div class="menu-primary">
+              <button class="btn btn-menu" data-action="new">▶ New Game</button>
+              <button class="btn btn-menu" data-action="continue">Continue</button>
+              <button class="btn btn-menu" data-action="load">Load Game</button>
+            </div>
+            <div class="menu-secondary">
+              <button class="btn btn-tile" data-action="leaderboard">🏆<span>Leaderboard</span></button>
+              <button class="btn btn-tile" data-action="achievements">🎖<span>Achievements</span></button>
+              <button class="btn btn-tile" data-action="stats">📊<span>Statistics</span></button>
+              <button class="btn btn-tile" data-action="manual">📖<span>Manual</span></button>
+              <button class="btn btn-tile" data-action="settings">⚙<span>Settings</span></button>
+              <button class="btn btn-tile" data-action="credits">✒<span>Credits</span></button>
+              <button class="btn btn-tile" data-action="account">👤<span class="account-label">Sign In</span></button>
+            </div>
+          </nav>
+          <footer class="menu-footer">
+            <span>v${GAME_VERSION} · Final Year Project</span>
+            <span class="account-status"></span>
+          </footer>
         </div>
       </div>`;
 
@@ -46,13 +56,13 @@ export class MainMenu {
   refresh() {
     const contBtn = this.el.querySelector('[data-action="continue"]');
     contBtn.disabled = !this.handlers.hasSave();
-    const accBtn = this.el.querySelector('[data-action="account"]');
+    const accLabel = this.el.querySelector('.account-label');
     const status = this.el.querySelector('.account-status');
     if (api.isAuthenticated) {
-      accBtn.textContent = 'Sign Out';
+      accLabel.textContent = 'Sign Out';
       status.textContent = `Signed in as ${api.user?.username ?? 'player'}`;
     } else {
-      accBtn.textContent = 'Sign In';
+      accLabel.textContent = 'Sign In';
       status.textContent = 'Playing offline — progress saved locally';
     }
     // Slow menu breathing effect on the title
@@ -68,6 +78,8 @@ export class MainMenu {
       case 'load': screens.show('save-load', { mode: 'load' }); break;
       case 'leaderboard': screens.show('leaderboard'); break;
       case 'achievements': screens.show('achievements'); break;
+      case 'stats': screens.show('stats'); break;
+      case 'manual': screens.show('manual', { returnTo: 'main-menu' }); break;
       case 'settings': screens.show('settings', { returnTo: 'main-menu' }); break;
       case 'credits': screens.show('credits'); break;
       case 'account':

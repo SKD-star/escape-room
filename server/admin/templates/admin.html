@@ -53,10 +53,22 @@
       background: none; color: var(--fg-2); cursor: pointer; font-size: 0.78rem;
     }
     button.act:hover { border-color: var(--accent); color: var(--fg); }
-    input[type="text"], input[type="password"] {
+    button.act.arrow { padding: 4px 9px; font-size: 0.7rem; line-height: 1; }
+    button.act:disabled { opacity: 0.25; cursor: not-allowed; border-color: var(--border); color: var(--fg-3); }
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
       background: #0a0a12; border: 1px solid var(--border); color: var(--fg);
       padding: 9px 14px; border-radius: 8px; font: inherit; width: 100%;
     }
+    textarea { resize: vertical; min-height: 60px; }
+    button.act.danger { border-color: rgba(192,57,43,0.4); color: #e8938a; }
+    button.act.danger:hover { border-color: var(--blood); background: rgba(192,57,43,0.1); }
+    button.act.primary { border-color: var(--accent); color: var(--accent); }
+    .panel-box { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px; }
+    .panel-box h3 { font-size: 0.9rem; margin-bottom: 14px; color: var(--fg); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-3); margin-bottom: 5px; }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ok); margin-right:7px; box-shadow:0 0 6px var(--ok); }
     .row { display: flex; gap: 10px; margin-bottom: 16px; }
     .chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 28px; }
     .chart .bar { flex: 1; background: linear-gradient(180deg, var(--accent), #7a611a); border-radius: 3px 3px 0 0; min-height: 3px; position: relative; }
@@ -83,8 +95,10 @@
       <h1>Escape Room</h1>
       <nav id="nav">
         <button data-view="dashboard" class="active">Dashboard</button>
+        <button data-view="live">Live Players</button>
         <button data-view="users">Users</button>
         <button data-view="rooms">Rooms</button>
+        <button data-view="puzzlebank">Puzzle Bank</button>
         <button data-view="puzzles">Puzzle Analytics</button>
         <button data-view="leaderboard">Leaderboard</button>
         <button data-view="ailogs">AI Logs</button>
@@ -154,8 +168,10 @@ async function render(view) {
   main().innerHTML = '<p style="color:var(--fg-3)">Loading…</p>';
   try {
     if (view === 'dashboard') await renderDashboard();
+    else if (view === 'live') await renderLive();
     else if (view === 'users') await renderUsers(1);
     else if (view === 'rooms') await renderRooms();
+    else if (view === 'puzzlebank') await renderPuzzleBank();
     else if (view === 'puzzles') await renderPuzzles();
     else if (view === 'leaderboard') await renderLeaderboard();
     else if (view === 'ailogs') await renderAILogs(1);
@@ -169,11 +185,13 @@ async function renderDashboard() {
   main().innerHTML = `
     <h2>Dashboard</h2>
     <div class="cards">
-      <div class="card"><div class="label">Total Players</div><div class="value gold">${s.total_users}</div></div>
+      <div class="card"><div class="label">Active Now (15m)</div><div class="value gold">${s.active_now ?? 0}</div></div>
+      <div class="card"><div class="label">Total Players</div><div class="value">${s.total_users}</div></div>
       <div class="card"><div class="label">New This Week</div><div class="value">${s.new_users_7d}</div></div>
       <div class="card"><div class="label">Game Saves</div><div class="value">${s.total_saves}</div></div>
       <div class="card"><div class="label">Puzzles Solved</div><div class="value gold">${s.puzzles_solved}</div></div>
       <div class="card"><div class="label">Solve Rate</div><div class="value">${Math.round(s.solve_rate*100)}%</div></div>
+      <div class="card"><div class="label">Bank Puzzles</div><div class="value">${s.bank_puzzles ?? 0}</div></div>
       <div class="card"><div class="label">AI Calls</div><div class="value">${s.ai_calls}</div></div>
       <div class="card"><div class="label">OpenAI Share</div><div class="value">${Math.round(s.ai_openai_share*100)}%</div></div>
       <div class="card"><div class="label">Events (7d)</div><div class="value">${s.events_7d}</div></div>
@@ -208,20 +226,55 @@ async function toggleUser(id) {
   renderUsers(1);
 }
 
+const THEMES = ['library','temple','prison','laboratory','hospital','mansion','castle','bunker','cyber','boss'];
+
 async function renderRooms() {
   const data = await req('/rooms');
   main().innerHTML = `
     <h2>Rooms</h2>
-    <table><thead><tr><th>#</th><th>Room</th><th>Theme</th><th>Difficulty</th><th>Status</th><th></th></tr></thead>
-    <tbody>${data.rooms.map(r => `
-      <tr><td>${r.order_index + 1}</td><td style="color:var(--fg)">${esc(r.name)}</td><td>${esc(r.theme)}</td>
+    <div class="panel-box">
+      <h3>Add a room</h3>
+      <div class="grid2">
+        <div class="field"><label>Room key</label><input type="text" id="nr-key" placeholder="e.g. crypt_of_echoes" /></div>
+        <div class="field"><label>Display name</label><input type="text" id="nr-name" placeholder="The Crypt of Echoes" /></div>
+        <div class="field"><label>Theme</label><select id="nr-theme">${THEMES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="field"><label>Base difficulty (0.1–0.95)</label><input type="number" id="nr-diff" value="0.5" min="0.1" max="0.95" step="0.05" /></div>
+      </div>
+      <div class="field"><label>Story (optional)</label><textarea id="nr-story" placeholder="A sentence of atmosphere…"></textarea></div>
+      <button class="act primary" onclick="createRoom()">Create room</button>
+      <p class="err" id="nr-err"></p>
+    </div>
+    <table><thead><tr><th>#</th><th>Order</th><th>Room</th><th>Key</th><th>Theme</th><th>Difficulty</th><th>Status</th><th></th></tr></thead>
+    <tbody>${data.rooms.map((r, i) => `
+      <tr><td>${i + 1}</td>
+      <td style="white-space:nowrap">
+        <button class="act arrow" onclick="moveRoom('${esc(r.room_key)}','up')" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+        <button class="act arrow" onclick="moveRoom('${esc(r.room_key)}','down')" ${i === data.rooms.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+      </td>
+      <td style="color:var(--fg)">${esc(r.name)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.72rem">${esc(r.room_key)}</td><td>${esc(r.theme)}</td>
       <td><input type="text" style="width:64px" value="${r.base_difficulty}" id="diff-${esc(r.room_key)}" /></td>
       <td>${r.enabled ? '<span class="pill ok">enabled</span>' : '<span class="pill bad">disabled</span>'}</td>
       <td><button class="act" onclick="saveRoom('${esc(r.room_key)}', ${r.enabled})">Save</button>
-          <button class="act" onclick="toggleRoom('${esc(r.room_key)}', ${!r.enabled})">${r.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')}
-    </tbody></table>`;
+          <button class="act" onclick="toggleRoom('${esc(r.room_key)}', ${!r.enabled})">${r.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="act danger" onclick="deleteRoom('${esc(r.room_key)}', '${esc(r.name)}')">Delete</button></td></tr>`).join('')}
+    </tbody></table>
+    <p style="color:var(--fg-3);font-size:0.78rem;margin-top:12px">Order, enabled state and custom rooms drive the actual game campaign — they take effect the next time a player starts a <b>New Game</b>. Custom rooms play in the 3D environment of their theme.</p>`;
 }
 
+async function createRoom() {
+  const err = document.getElementById('nr-err'); err.textContent = '';
+  const body = {
+    room_key: document.getElementById('nr-key').value,
+    name: document.getElementById('nr-name').value,
+    theme: document.getElementById('nr-theme').value,
+    base_difficulty: parseFloat(document.getElementById('nr-diff').value),
+    story: document.getElementById('nr-story').value,
+  };
+  const res = await req('/rooms', { method: 'POST', body: JSON.stringify(body) });
+  if (res.error) { err.textContent = res.error; return; }
+  renderRooms();
+}
 async function saveRoom(key, enabled) {
   const diff = parseFloat(document.getElementById('diff-' + key).value);
   await req('/rooms/' + key, { method: 'POST', body: JSON.stringify({ base_difficulty: diff, enabled }) });
@@ -230,6 +283,120 @@ async function saveRoom(key, enabled) {
 async function toggleRoom(key, enabled) {
   await req('/rooms/' + key, { method: 'POST', body: JSON.stringify({ enabled }) });
   renderRooms();
+}
+async function deleteRoom(key, name) {
+  if (!confirm(`Delete room "${name}"? This removes its metadata (players' saves are unaffected).`)) return;
+  await req('/rooms/' + key, { method: 'DELETE' });
+  renderRooms();
+}
+async function moveRoom(key, direction) {
+  const res = await req('/rooms/' + key + '/move', { method: 'POST', body: JSON.stringify({ direction }) });
+  if (res.error) return;
+  renderRooms();
+}
+
+// -- Live players ----------------------------------------------------------
+let liveTimer = null;
+async function renderLive() {
+  if (liveTimer) clearInterval(liveTimer);
+  const draw = async () => {
+    const data = await req('/active-players');
+    const rows = data.players.map(p => `
+      <tr><td><span class="dot"></span>${esc(p.username)}</td>
+      <td>${esc(p.room_id || '—')}</td><td>${p.events}</td>
+      <td>${p.last_seen ? new Date(p.last_seen).toLocaleTimeString() : ''}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--fg-3)">${esc((p.session_id||'').slice(0,8))}</td></tr>`).join('');
+    main().innerHTML = `
+      <h2>Live Players <span style="font-size:0.8rem;color:var(--fg-3)">· last ${data.window_minutes} min · auto-refresh</span></h2>
+      <div class="cards"><div class="card"><div class="label">Active Sessions</div><div class="value gold">${data.players.length}</div></div></div>
+      <table><thead><tr><th>Player</th><th>Current Room</th><th>Events</th><th>Last Seen</th><th>Session</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="color:var(--fg-3)">No players active right now.</td></tr>'}</tbody></table>`;
+  };
+  await draw();
+  liveTimer = setInterval(() => {
+    if (!document.querySelector('#nav button.active')?.dataset.view.includes('live')) { clearInterval(liveTimer); return; }
+    draw().catch(() => {});
+  }, 8000);
+}
+
+// -- Puzzle bank -----------------------------------------------------------
+async function renderPuzzleBank() {
+  const data = await req('/puzzle-bank');
+  main().innerHTML = `
+    <h2>Puzzle Bank <span style="font-size:0.8rem;color:var(--fg-3)">· hand-authored puzzles served in-game</span></h2>
+    <div class="panel-box">
+      <h3>Add a puzzle</h3>
+      <div class="grid2">
+        <div class="field"><label>Theme</label><select id="pb-theme">${THEMES.map(t=>`<option>${t}</option>`).join('')}</select></div>
+        <div class="field"><label>Type</label><select id="pb-type" onchange="pbFields()"><option value="keypad">keypad</option><option value="riddle">riddle</option><option value="sequence">sequence</option></select></div>
+        <div class="field"><label>Title</label><input type="text" id="pb-title" placeholder="The Sealed Mechanism" /></div>
+        <div class="field"><label>Difficulty (0–1)</label><input type="number" id="pb-diff" value="0.5" min="0" max="1" step="0.05" /></div>
+      </div>
+      <div class="field"><label>Narrative</label><textarea id="pb-narr" placeholder="Two atmospheric sentences…"></textarea></div>
+      <div id="pb-dynamic"></div>
+      <button class="act primary" onclick="createPuzzle()">Add to bank</button>
+      <p class="err" id="pb-err"></p>
+    </div>
+    <table><thead><tr><th>Theme</th><th>Type</th><th>Title</th><th>Diff</th><th>Answer/Code</th><th>Status</th><th></th></tr></thead>
+    <tbody>${data.puzzles.map(p => `
+      <tr><td>${esc(p.theme)}</td><td>${esc(p.type)}</td><td style="color:var(--fg)">${esc(p.title)}</td>
+      <td>${p.difficulty}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:0.72rem">${esc(pbAnswer(p))}</td>
+      <td>${p.enabled ? '<span class="pill ok">live</span>' : '<span class="pill bad">off</span>'}</td>
+      <td><button class="act" onclick="togglePuzzle(${p.id}, ${!p.enabled})">${p.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="act danger" onclick="deletePuzzle(${p.id})">Delete</button></td></tr>`).join('') || '<tr><td colspan="7" style="color:var(--fg-3)">Bank is empty — add one above.</td></tr>'}
+    </tbody></table>`;
+  pbFields();
+}
+
+function pbAnswer(p) {
+  if (p.type === 'keypad') return p.payload.code || '';
+  if (p.type === 'riddle') return p.payload.answer || '';
+  if (p.type === 'sequence') return (p.payload.sequence || []).join(' ');
+  return '';
+}
+
+function pbFields() {
+  const type = document.getElementById('pb-type').value;
+  const box = document.getElementById('pb-dynamic');
+  if (type === 'keypad') box.innerHTML = `
+    <div class="grid2"><div class="field"><label>Code (digits)</label><input type="text" id="pb-code" placeholder="1847" /></div>
+    <div class="field"><label>Clue</label><input type="text" id="pb-clue" placeholder="Where the code hides…" /></div></div>`;
+  else if (type === 'riddle') box.innerHTML = `
+    <div class="field"><label>Riddle</label><textarea id="pb-riddle" placeholder="The riddle text…"></textarea></div>
+    <div class="field"><label>Answer (one lowercase word)</label><input type="text" id="pb-answer" placeholder="book" /></div>`;
+  else box.innerHTML = `
+    <div class="field"><label>Sequence (comma-separated symbols)</label><input type="text" id="pb-seq" placeholder="serpent, moon, eye, flame" /></div>
+    <div class="field"><label>Clue</label><input type="text" id="pb-clue" placeholder="Which comes first…" /></div>`;
+}
+
+function pbPayload(type) {
+  if (type === 'keypad') return { code: v('pb-code'), clue: v('pb-clue') };
+  if (type === 'riddle') return { riddle: v('pb-riddle'), answer: v('pb-answer') };
+  return { sequence: v('pb-seq'), clue: v('pb-clue') };
+}
+const v = (id) => document.getElementById(id)?.value ?? '';
+
+async function createPuzzle() {
+  const err = document.getElementById('pb-err'); err.textContent = '';
+  const type = v('pb-type');
+  const body = {
+    theme: v('pb-theme'), type, title: v('pb-title'),
+    narrative: v('pb-narr'), difficulty: parseFloat(v('pb-diff')),
+    payload: pbPayload(type),
+  };
+  const res = await req('/puzzle-bank', { method: 'POST', body: JSON.stringify(body) });
+  if (res.error) { err.textContent = res.error; return; }
+  renderPuzzleBank();
+}
+async function togglePuzzle(id, enabled) {
+  await req('/puzzle-bank/' + id, { method: 'POST', body: JSON.stringify({ enabled }) });
+  renderPuzzleBank();
+}
+async function deletePuzzle(id) {
+  if (!confirm('Delete this puzzle from the bank?')) return;
+  await req('/puzzle-bank/' + id, { method: 'DELETE' });
+  renderPuzzleBank();
 }
 
 async function renderPuzzles() {
@@ -248,13 +415,30 @@ async function renderPuzzles() {
 async function renderLeaderboard() {
   const data = await req('/leaderboard');
   main().innerHTML = `
-    <h2>Leaderboard</h2>
-    <table><thead><tr><th>#</th><th>Player</th><th>Score</th><th>Time</th><th>Rooms</th><th>Hints</th><th>Ending</th><th>Date</th></tr></thead>
+    <h2>Leaderboard <span style="font-size:0.8rem;color:var(--fg-3)">· ${data.total ?? data.leaderboard.length} total runs</span></h2>
+    <div class="row" style="justify-content:flex-end">
+      <button class="act danger" onclick="resetLeaderboard()">Reset all leaderboard data</button>
+    </div>
+    <table><thead><tr><th>#</th><th>Player</th><th>Score</th><th>Time</th><th>Rooms</th><th>Hints</th><th>Ending</th><th>Date</th><th></th></tr></thead>
     <tbody>${data.leaderboard.map((e, i) => `
       <tr><td>${i+1}</td><td style="color:var(--fg)">${esc(e.username)}</td><td style="color:var(--accent)">${e.score}</td>
       <td>${Math.floor(e.completion_time_s/60)}m</td><td>${e.rooms_cleared}/10</td><td>${e.hints_used}</td>
-      <td>${esc(e.ending)}</td><td>${e.date ? e.date.slice(0,10) : ''}</td></tr>`).join('') || '<tr><td colspan="8" style="color:var(--fg-3)">No runs yet.</td></tr>'}
+      <td>${esc(e.ending)}</td><td>${e.date ? e.date.slice(0,10) : ''}</td>
+      <td><button class="act danger" onclick="deleteRun(${e.id})">✕</button></td></tr>`).join('') || '<tr><td colspan="9" style="color:var(--fg-3)">No runs yet.</td></tr>'}
     </tbody></table>`;
+}
+
+async function deleteRun(id) {
+  if (!confirm('Remove this single run from the leaderboard?')) return;
+  await req('/leaderboard/' + id, { method: 'DELETE' });
+  renderLeaderboard();
+}
+async function resetLeaderboard() {
+  if (!confirm('Reset the ENTIRE leaderboard? Every recorded run will be permanently deleted.')) return;
+  if (!confirm('This cannot be undone. Delete all leaderboard data?')) return;
+  const res = await req('/leaderboard/reset', { method: 'POST' });
+  alert(`Leaderboard reset — ${res.deleted ?? 0} runs removed.`);
+  renderLeaderboard();
 }
 
 async function renderAILogs(page) {

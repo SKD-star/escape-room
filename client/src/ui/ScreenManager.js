@@ -12,9 +12,15 @@ class ScreenManager {
     /** @type {Map<string, {el: HTMLElement, onShow?: Function, onHide?: Function, persistent?: boolean}>} */
     this.screens = new Map();
     this.current = null;
+    this.fading = false;
     this.fadeEl = document.createElement('div');
     this.fadeEl.className = 'fade-black';
     document.body.appendChild(this.fadeEl);
+    // Watchdog: a fade that is "active" with no transition in flight is a
+    // stuck black screen — clear it. Cheap insurance against any missed path.
+    setInterval(() => {
+      if (!this.fading) this.fadeEl.classList.remove('active');
+    }, 3000);
   }
 
   /**
@@ -38,6 +44,7 @@ class ScreenManager {
       const prev = this.screens.get(this.current);
       prev?.el.classList.remove('visible');
       prev?.onHide?.();
+      this.previous = this.current; // who we navigated away from
     }
     this.current = name;
     next.el.classList.add('visible');
@@ -64,12 +71,18 @@ class ScreenManager {
     for (const [name] of this.screens) this.hide(name);
   }
 
-  /** Cinematic fade to black, run fn, fade back. */
+  /** Cinematic fade to black, run fn, fade back. The fade ALWAYS clears,
+   *  even if fn throws — a stuck black screen is worse than any error. */
   async fadeTransition(fn) {
+    this.fading = true;
     this.fadeEl.classList.add('active');
     await new Promise((r) => setTimeout(r, 950));
-    await fn?.();
-    this.fadeEl.classList.remove('active');
+    try {
+      await fn?.();
+    } finally {
+      this.fading = false;
+      this.fadeEl.classList.remove('active');
+    }
   }
 }
 

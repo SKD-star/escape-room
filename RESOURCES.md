@@ -6,24 +6,17 @@
 | `three` (r185) | 3D engine — https://threejs.org/ |
 | `postprocessing` | Effects (bloom, SSAO…) — pmndrs |
 | `@dimforge/rapier3d-compat` | Rapier physics (WASM, no bundler config needed) |
-| `cannon-es` | Cannon physics |
 | `gsap` | Animation |
-| `animejs` | Animation |
-| `socket.io` / `socket.io-client` | Multiplayer networking |
-| `howler` | Audio |
-| `standardized-audio-context` | Web Audio wrapper |
-| `vite`, `webpack` (dev) | Bundlers — `npx vite` to run a dev server |
+| `vite` (dev) | Bundler / dev server |
+| `puppeteer-core` (dev) | Headless-browser smoke tests (`node scripts/smoke.js`) |
 
 ## Installed (Python — `venv/`, see `requirements.txt`)
 Activate: `venv\Scripts\activate`
-- Flask, Flask-Login, Flask-SQLAlchemy, SQLAlchemy — backend/auth/DB
+- Flask, Flask-CORS, Flask-SQLAlchemy, SQLAlchemy — backend/DB
+- bcrypt, PyJWT — auth
 - openai — OpenAI API SDK (docs: https://platform.openai.com/docs)
-- openai-whisper + torch (CPU) — speech-to-text (ffmpeg is installed system-wide)
-
-## Cloned
-- `ComfyUI/` — https://github.com/comfyanonymous/ComfyUI
-  Install its deps before use: `venv\Scripts\pip install -r ComfyUI\requirements.txt`
-  Run: `venv\Scripts\python ComfyUI\main.py` (CPU torch installed; add `--cpu`, or install CUDA torch for GPU)
+- pymysql — optional MySQL driver
+- python-dotenv — .env loading
 
 ## Three.js examples worth studying
 - Skinned animation/morph: https://threejs.org/examples/#webgl_animation_skinning_morph
@@ -58,4 +51,4 @@ Activate: `venv\Scripts\activate`
 - Needle Engine https://github.com/needle-tools/needle-engine
 
 ## Docs
-- MDN https://developer.mozilla.org/ · Socket.IO https://docs.socket.io/ · Vite https://vitejs.dev/ · Webpack https://webpack.js.org/ · GSAP https://github.com/greensock/GSAP · anime.js https://animejs.com/
+- MDN https://developer.mozilla.org/ · Vite https://vitejs.dev/ · GSAP https://github.com/greensock/GSAP

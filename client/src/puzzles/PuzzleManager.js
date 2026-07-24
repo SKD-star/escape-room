@@ -12,6 +12,7 @@ import gsap from 'gsap';
 import { bus, Events } from '../core/EventBus.js';
 import { api } from '../net/ApiClient.js';
 import { aiClient } from '../ai/AIClient.js';
+import { difficulty } from '../config/difficulty.js';
 import { html, screens } from '../ui/ScreenManager.js';
 import { escapeHtml } from '../ui/screens/MenuScreens.js';
 
@@ -48,9 +49,10 @@ export class PuzzleManager {
     this.puzzle = null;
     this.sequencePick = [];
     // Fetch in the background so it's ready when the player finds the anchor
-    this.puzzle = await aiClient.getPuzzle(theme, roomKey, 0.5);
+    const base = Math.max(0.05, Math.min(0.95, 0.5 + difficulty.mode.puzzleBias));
+    this.puzzle = await aiClient.getPuzzle(theme, roomKey, base);
     this.startedAt = performance.now();
-    bus.emit(Events.OBJECTIVE_CHANGED, 'Explore the room. Something here holds the way out.');
+    bus.emit(Events.OBJECTIVE_CHANGED, 'Find the mechanism under the gold light and solve it.');
 
     // Scatter the clue into the world after a delay (diegetic hint)
     setTimeout(() => {

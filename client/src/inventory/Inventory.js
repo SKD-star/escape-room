@@ -12,7 +12,8 @@ const RECIPES = {
     id: 'memento', name: 'Locketed Key', icon: '🔐',
     description: 'The key fits inside the locket perfectly, as if they were made as one. It hums.',
   },
-  'cipher_codebook+access_chip': {
+  // note: key must be the two item ids sorted alphabetically
+  'access_chip+codebook': {
     id: 'decoded_chip', name: 'Decoded Chip', icon: '🧩',
     description: 'The old cipher unlocks the chip\'s partitions. Coordinates, dates… and your name.',
   },

@@ -75,21 +75,35 @@ export class InteractionSystem {
       return;
     }
 
-    // Raycast from screen center
-    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.engine.camera);
-    const hits = this.raycaster.intersectObjects([...this.interactables], true);
-
-    let found = null;
-    for (const hit of hits) {
-      let obj = hit.object;
-      while (obj && !obj.userData.interactable) obj = obj.parent;
-      if (obj?.userData.interactable) { found = obj; break; }
+    // Raycast from screen center — with aim assist: if the exact center
+    // misses, sample a small ring around it so small props (keys, notes,
+    // batteries) are easy to target.
+    const candidates = [...this.interactables];
+    let found = this.castAt(0, 0, candidates);
+    if (!found) {
+      const r = 0.08; // NDC assist radius
+      for (const [ox, oy] of [[r, 0], [-r, 0], [0, r], [0, -r], [r * 0.7, r * 0.7], [-r * 0.7, -r * 0.7]]) {
+        found = this.castAt(ox, oy, candidates);
+        if (found) break;
+      }
     }
 
     if (found !== this.target) {
       this.target = found;
       bus.emit(Events.LOOK_TARGET, found ? found.userData.interactable : null);
     }
+  }
+
+  /** Single raycast at an NDC offset; returns the interactable root or null. */
+  castAt(x, y, candidates) {
+    this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.engine.camera);
+    const hits = this.raycaster.intersectObjects(candidates, true);
+    for (const hit of hits) {
+      let obj = hit.object;
+      while (obj && !obj.userData.interactable) obj = obj.parent;
+      if (obj?.userData.interactable) return obj;
+    }
+    return null;
   }
 
   interact() {

@@ -16,7 +16,7 @@ import time
 from flask import current_app
 
 from extensions import db
-from models import AILog
+from models import AILog, PuzzleBank
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +137,32 @@ _HINT_TIERS = [
 ]
 
 
+def _bank_puzzle(theme: str, difficulty: float) -> dict | None:
+    """Prefer an admin-authored puzzle for this theme, closest in difficulty.
+
+    Returns None when the bank has nothing enabled for the theme, so callers
+    fall through to procedural generation. Never raises — a broken bank must
+    not break gameplay.
+    """
+    try:
+        candidates = PuzzleBank.query.filter_by(theme=theme, enabled=True).all()
+        if not candidates:
+            return None
+        # Bias toward puzzles near the requested difficulty, but keep variety.
+        candidates.sort(key=lambda p: abs(p.difficulty - difficulty))
+        pool = candidates[: max(1, len(candidates) // 2)]
+        return random.choice(pool).to_puzzle()
+    except Exception:  # noqa: BLE001 — the bank is a bonus, not a dependency
+        db.session.rollback()
+        log.exception("Puzzle bank lookup failed")
+        return None
+
+
 def _fallback_puzzle(theme: str, difficulty: float) -> dict:
+    authored = _bank_puzzle(theme, difficulty)
+    if authored is not None:
+        return authored
+
     words = _THEME_WORDS.get(theme, _THEME_WORDS["library"])
     kind = random.choice(["keypad", "riddle", "sequence"])
 

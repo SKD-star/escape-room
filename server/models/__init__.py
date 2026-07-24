@@ -5,11 +5,12 @@ from .achievement import Achievement, UserAchievement
 from .leaderboard import LeaderboardEntry
 from .analytics import AnalyticsEvent
 from .puzzle import PuzzleRecord, AILog
+from .puzzle_bank import PuzzleBank
 from .room import RoomMeta
 from .setting import UserSetting
 
 __all__ = [
     "User", "PasswordReset", "GameSave", "Achievement", "UserAchievement",
     "LeaderboardEntry", "AnalyticsEvent", "PuzzleRecord", "AILog",
-    "RoomMeta", "UserSetting",
+    "PuzzleBank", "RoomMeta", "UserSetting",
 ]

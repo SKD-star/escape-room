@@ -12,6 +12,10 @@ import {
   PauseMenu, CreditsScreen, LeaderboardScreen, AchievementsScreen, SaveLoadScreen,
 } from './ui/screens/MenuScreens.js';
 import { HUD } from './ui/screens/HUD.js';
+import { DifficultyScreen } from './ui/screens/DifficultyScreen.js';
+import { ManualScreen } from './ui/screens/ManualScreen.js';
+import { JournalScreen } from './ui/screens/JournalScreen.js';
+import { StatsScreen } from './ui/screens/StatsScreen.js';
 import {
   NoteReader, DialogueBox, ObjectivesScreen, IntroScreen, EndingScreen,
 } from './ui/screens/GameOverlays.js';
@@ -40,14 +44,21 @@ async function boot() {
   const hud = new HUD();
   const intro = new IntroScreen(() => game.startRun());
   const ending = new EndingScreen(() => game.toMenu());
+  const journal = new JournalScreen(
+    () => game.rooms?.currentKey,
+    () => game.resume(),
+  );
 
-  game = new Game({ loading, hud, intro, ending });
+  game = new Game({ loading, hud, intro, ending, journal });
 
   new MainMenu({
-    onNewGame: () => game.newGame(),
+    onNewGame: () => screens.show('difficulty'),
     onContinue: () => game.continueGame(),
     hasSave: () => game.saves.hasAnySave(),
   });
+  new DifficultyScreen((modeKey) => game.newGame(modeKey));
+  new ManualScreen();
+  new StatsScreen();
   new AuthScreen();
   new SettingsScreen();
   new PauseMenu({

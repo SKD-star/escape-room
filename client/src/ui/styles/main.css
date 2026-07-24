@@ -361,6 +361,25 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 .hud-objective .label { color: var(--accent); margin-bottom: 4px; }
 .hud-objective p { font-size: 0.9rem; color: var(--fg-secondary); }
 
+.hud-briefing {
+  position: absolute; top: 108px; left: 28px;
+  max-width: 380px;
+  padding: 14px 20px;
+  opacity: 0;
+  pointer-events: none;
+  border-left: 3px solid var(--accent);
+}
+.hud-briefing.visible { display: block; }
+.hud-briefing .label { color: var(--accent); margin-bottom: 6px; }
+.hud-briefing .brief-text { font-size: 0.92rem; color: var(--fg-primary); line-height: 1.5; }
+.hud-briefing .brief-tip {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--spectral-bright);
+  font-style: italic;
+  line-height: 1.45;
+}
+
 .hud-room-title {
   position: absolute; top: 10%; left: 50%;
   transform: translateX(-50%);
@@ -417,6 +436,85 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
   transition: width 120ms linear;
 }
 
+/* -- Sanity: an eye that narrows as your grip slips ----------- */
+.hud-sanity {
+  position: absolute; bottom: 32px; left: 28px;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease-out);
+}
+.hud-sanity.visible { opacity: 1; }
+.hud-sanity .eye {
+  width: 30px; height: 18px;
+  border: 1px solid var(--spectral);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 12px rgba(74, 122, 140, 0.35);
+}
+.hud-sanity .pupil {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--spectral-bright);
+  transition: all var(--dur-med) var(--ease-out);
+}
+.hud-sanity .sanity-bar {
+  width: 3px; height: 34px;
+  background: rgba(232, 230, 227, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex; align-items: flex-end;
+}
+.hud-sanity .sanity-bar .fill {
+  width: 100%;
+  background: linear-gradient(180deg, var(--spectral-bright), var(--spectral));
+  transition: height 300ms var(--ease-out);
+}
+.hud-sanity.critical .eye { border-color: var(--blood-bright); box-shadow: var(--glow-blood); animation: sanity-throb 1.1s var(--ease-in-out) infinite; }
+.hud-sanity.critical .pupil { background: var(--blood-bright); width: 3px; height: 10px; border-radius: 2px; }
+.hud-sanity.critical .sanity-bar .fill { background: linear-gradient(180deg, var(--blood-bright), var(--blood)); }
+@keyframes sanity-throb {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* -- Flashlight battery --------------------------------------- */
+.hud-flashlight {
+  position: absolute; bottom: 32px; right: 28px;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease-out);
+  filter: grayscale(1) brightness(0.6);
+}
+.hud-flashlight.visible { opacity: 1; }
+.hud-flashlight.on { filter: none; }
+.hud-flashlight .icon { font-size: 1rem; }
+.hud-flashlight .battery {
+  width: 56px; height: 8px;
+  border: 1px solid var(--border-ghost);
+  border-radius: 3px;
+  padding: 1px;
+  position: relative;
+}
+.hud-flashlight .battery::after {
+  content: '';
+  position: absolute; right: -4px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 4px;
+  background: var(--border-ghost);
+  border-radius: 0 1px 1px 0;
+}
+.hud-flashlight .battery .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  border-radius: 2px;
+  transition: width 300ms linear;
+}
+.hud-flashlight.low .battery .fill { background: linear-gradient(90deg, var(--blood), var(--blood-bright)); animation: battery-blink 0.9s step-end infinite; }
+@keyframes battery-blink {
+  0%, 60% { opacity: 1; }
+  61%, 100% { opacity: 0.35; }
+}
+
 .hud-fps {
   position: absolute; top: 16px; right: 16px;
   font-family: var(--font-mono);
@@ -428,6 +526,130 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
   display: none;
 }
 .hud-fps.visible { display: block; }
+
+/* -- Compass tape --------------------------------------------- */
+.hud-compass {
+  position: absolute; top: 20px; left: 50%;
+  transform: translateX(-50%);
+  width: 280px; height: 26px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--dur-med) var(--ease-out);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+.hud-compass.visible { opacity: 0.85; }
+.hud-compass .tape {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  will-change: transform;
+}
+.hud-compass .tape span {
+  flex: 0 0 28px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--fg-secondary);
+}
+.hud-compass .tape .dot { color: var(--fg-muted); font-size: 0.55rem; }
+.hud-compass .tape .north { color: var(--accent); font-weight: 700; }
+.hud-compass .tick {
+  position: absolute; top: 0; left: 50%;
+  width: 1px; height: 6px;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+/* -- Speedrun timer ------------------------------------------- */
+.hud-timer {
+  position: absolute; top: 52px; right: 16px;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--font-mono);
+}
+.hud-timer.visible { display: flex; }
+.hud-timer .clock {
+  font-size: 1rem;
+  color: var(--fg-primary);
+  padding: 3px 10px;
+  background: rgba(7, 7, 12, 0.55);
+  border-radius: 4px;
+}
+.hud-timer .split { font-size: 0.75rem; }
+
+/* -- Room countdown (Normal / Nightmare) ---------------------- */
+.hud-countdown {
+  position: absolute; top: 92px; left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center; gap: 8px;
+  padding: 5px 16px;
+  font-family: var(--font-mono);
+  font-size: 1.1rem; letter-spacing: 0.06em;
+  color: var(--fg-primary);
+  background: rgba(7, 7, 12, 0.62);
+  border: 1px solid var(--border-ghost);
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.hud-countdown.visible { display: flex; }
+.hud-countdown .cd-icon { font-size: 0.9rem; opacity: 0.85; }
+.hud-countdown.harsh { border-color: var(--border-accent); }
+/* < 35% remaining — amber warning */
+.hud-countdown.warn {
+  color: var(--accent-bright);
+  border-color: var(--border-accent);
+  box-shadow: var(--glow-accent);
+}
+/* < 15% remaining — red, pulsing */
+.hud-countdown.urgent {
+  color: var(--blood-bright);
+  border-color: var(--blood-bright);
+  box-shadow: var(--glow-blood);
+  animation: countdown-pulse 0.9s var(--ease-in-out) infinite;
+}
+/* expired — overtime */
+.hud-countdown.over {
+  color: #fff;
+  background: rgba(138, 28, 28, 0.55);
+  border-color: var(--blood-bright);
+  box-shadow: var(--glow-blood);
+  animation: countdown-pulse 0.7s var(--ease-in-out) infinite;
+}
+.hud-countdown.over:not(.timeout) .cd-clock::after { content: ' OVERTIME'; font-size: 0.7rem; letter-spacing: 0.14em; }
+/* solved in time — green flash */
+.hud-countdown.banked {
+  color: var(--success);
+  border-color: var(--success);
+  box-shadow: 0 0 18px rgba(74, 140, 95, 0.5);
+  animation: none;
+}
+@keyframes countdown-pulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.06); }
+}
+
+/* -- Sound captions (accessibility) --------------------------- */
+.hud-captions {
+  position: absolute; bottom: 170px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.caption {
+  padding: 3px 14px;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--spectral-bright);
+  background: rgba(7, 7, 12, 0.75);
+  border-radius: 4px;
+}
 
 /* =============================================================
    LOADING SCREEN
@@ -462,19 +684,141 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 /* =============================================================
    MENU LAYOUTS
    ============================================================= */
-.menu-layout {
-  display: flex; flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
-  margin-top: var(--space-5);
+#main-menu { overflow: hidden; position: absolute; }
+#main-menu > * { position: relative; z-index: 1; }
+
+/* Animated main-menu atmosphere: drifting fog banks + rising embers */
+#main-menu::before,
+#main-menu::after {
+  content: '';
+  position: absolute; inset: -20%;
+  pointer-events: none;
+  z-index: 0;
 }
+#main-menu::before {
+  background:
+    radial-gradient(ellipse 40% 28% at 22% 68%, rgba(74, 122, 140, 0.10), transparent 70%),
+    radial-gradient(ellipse 50% 32% at 76% 30%, rgba(138, 28, 28, 0.09), transparent 70%),
+    radial-gradient(ellipse 36% 24% at 55% 82%, rgba(201, 162, 39, 0.05), transparent 70%);
+  animation: fog-drift 26s ease-in-out infinite alternate;
+  filter: blur(30px);
+}
+#main-menu::after {
+  background-image:
+    radial-gradient(2px 2px at 12% 88%, rgba(232, 197, 71, 0.8), transparent 100%),
+    radial-gradient(1.6px 1.6px at 34% 94%, rgba(255, 150, 60, 0.7), transparent 100%),
+    radial-gradient(2.2px 2.2px at 55% 90%, rgba(232, 197, 71, 0.6), transparent 100%),
+    radial-gradient(1.4px 1.4px at 71% 96%, rgba(255, 170, 80, 0.75), transparent 100%),
+    radial-gradient(1.8px 1.8px at 88% 92%, rgba(232, 197, 71, 0.65), transparent 100%);
+  background-size: 100% 100%;
+  animation: embers-rise 14s linear infinite;
+  opacity: 0.7;
+}
+@keyframes fog-drift {
+  from { transform: translate3d(-4%, 1%, 0) scale(1); }
+  to { transform: translate3d(4%, -2%, 0) scale(1.12); }
+}
+@keyframes embers-rise {
+  from { transform: translateY(12%); opacity: 0.75; }
+  60% { opacity: 0.5; }
+  to { transform: translateY(-105%); opacity: 0; }
+}
+
+/* -- Menu shell: header / nav / footer that can never overlap ---- */
+.menu-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3.5vh, 40px);
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(16px, 4vh, 48px) 24px 64px; /* bottom room for the footer */
+}
+.menu-head { text-align: center; }
+.menu-head .subtitle { margin-top: 10px; }
+
+.menu-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(12px, 2.5vh, 24px);
+}
+
+/* Primary actions: prominent stacked buttons */
+.menu-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  width: min(340px, 86vw);
+}
+.menu-primary .btn-menu {
+  width: 100%;
+  justify-content: center;
+  padding-left: 0;
+  border: 1px solid var(--border-ghost);
+  border-radius: var(--radius-sm);
+  background: rgba(14, 14, 24, 0.55);
+  backdrop-filter: var(--glass-blur);
+}
+.menu-primary .btn-menu:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-accent);
+  background: linear-gradient(90deg, rgba(201, 162, 39, 0.10), rgba(201, 162, 39, 0.04));
+  box-shadow: var(--glow-accent);
+}
+.menu-primary [data-action="new"] {
+  border-color: var(--border-accent);
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+
+/* Secondary: compact tile grid */
+.menu-secondary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: min(480px, 92vw);
+}
+.btn-tile {
+  flex-direction: column;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 4px;
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  background: rgba(14, 14, 24, 0.45);
+  backdrop-filter: var(--glass-blur);
+}
+.btn-tile:hover { transform: translateY(-2px); }
+.btn-tile > :first-child { font-size: 1.15rem; line-height: 1; filter: grayscale(0.4) sepia(0.3); }
+
 .menu-footer {
-  position: absolute; bottom: 24px; left: 0; right: 0;
-  display: flex; justify-content: space-between;
-  padding: 0 32px;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
   color: var(--fg-muted);
+  background: linear-gradient(180deg, transparent, rgba(7, 7, 12, 0.85));
+}
+.menu-footer .account-status { color: var(--fg-secondary); text-align: right; }
+
+/* Short windows: shrink the header, tighten gaps — nothing ever clips */
+@media (max-height: 760px) {
+  .title-hero { font-size: clamp(1.5rem, 4.2vh, 2.6rem); }
+  .menu-shell { gap: 12px; }
+  .menu-primary .btn-menu { min-height: 42px; padding-top: 8px; padding-bottom: 8px; }
+  .btn-tile { min-height: 54px; }
+}
+@media (max-height: 600px) {
+  .menu-head .subtitle { display: none; }
+  .btn-tile { min-height: 46px; font-size: 0.62rem; }
+  .btn-tile > :first-child { font-size: 1rem; }
 }
 
 .panel {
@@ -624,6 +968,40 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 .symbol-btn.picked { border-color: var(--accent); background: rgba(201, 162, 39, 0.12); }
 
 /* =============================================================
+   DIFFICULTY PICKER
+   ============================================================= */
+.diff-card {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 6px;
+  padding: 18px 22px;
+  text-align: left;
+  background: rgba(7, 7, 12, 0.5);
+  border: 1px solid var(--border-ghost);
+  border-radius: var(--radius-md);
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.diff-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--glow-accent);
+  transform: translateY(-2px);
+}
+.diff-card.recommended { border-color: rgba(201, 162, 39, 0.25); }
+.diff-card .diff-name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.diff-card .diff-blurb { font-size: 0.85rem; color: var(--fg-secondary); line-height: 1.5; }
+.diff-card .diff-mult {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+  letter-spacing: 0.1em;
+}
+
+/* =============================================================
    MISC
    ============================================================= */
 .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border-accent), transparent); }
@@ -642,6 +1020,80 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
   border-radius: 4px;
 }
 
+/* =============================================================
+   FIELD MANUAL
+   ============================================================= */
+.manual-body {
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  padding: 4px 12px 4px 2px;
+  margin: var(--space-3) 0;
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.manual-note {
+  font-size: 0.85rem; color: var(--fg-muted); line-height: 1.6;
+  margin-bottom: var(--space-2);
+}
+.manual-section { display: flex; flex-direction: column; gap: 6px; }
+.manual-h {
+  font-family: var(--font-display);
+  font-size: 1.05rem; letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.manual-p { font-size: 0.9rem; color: var(--fg-secondary); line-height: 1.7; }
+.manual-p strong { color: var(--fg-primary); }
+.manual-p em { color: var(--spectral-bright); font-style: italic; }
+.manual-list { margin: 4px 0 0 20px; display: flex; flex-direction: column; gap: 6px; }
+.manual-list li { line-height: 1.6; }
+.manual-p .kbd, .manual-kv .mkv-key, .manual-p .key {
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: var(--accent);
+  border: 1px solid var(--border-accent); border-radius: 4px;
+  padding: 1px 8px;
+}
+.manual-kv {
+  display: grid; grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 8px 18px; align-items: center;
+}
+.manual-kv .mkv-key {
+  justify-self: start; white-space: nowrap;
+  color: var(--accent); font-family: var(--font-mono); font-size: 0.78rem;
+}
+.manual-kv .mkv-val { font-size: 0.88rem; color: var(--fg-secondary); }
+.manual-callout {
+  padding: 12px 16px;
+  background: rgba(201, 162, 39, 0.06);
+  border: 1px solid var(--border-accent); border-radius: var(--radius-md);
+  font-size: 0.85rem; color: var(--fg-secondary); line-height: 1.6;
+}
+/* Chapters */
+.manual-chapter {
+  padding: 14px 16px;
+  border: 1px solid var(--border-ghost); border-radius: var(--radius-md);
+  background: rgba(7, 7, 12, 0.4);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mc-head { display: flex; align-items: center; gap: 14px; }
+.mc-index {
+  font-family: var(--font-display); font-size: 1.4rem;
+  color: var(--accent); opacity: 0.6; min-width: 34px;
+}
+.mc-name { font-family: var(--font-display); letter-spacing: 0.06em; font-size: 1rem; }
+.mc-chapter { font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-muted); }
+.mc-times {
+  margin-left: auto; text-align: right;
+  display: flex; flex-direction: column; gap: 2px;
+  font-family: var(--font-mono); font-size: 0.72rem; color: var(--fg-muted);
+}
+.mc-times .mc-hard { color: var(--blood-bright); }
+.mc-brief { font-size: 0.88rem; color: var(--fg-secondary); line-height: 1.6; }
+.mc-tip { font-size: 0.82rem; color: var(--spectral-bright); line-height: 1.55; }
+.mc-tip-label {
+  font-family: var(--font-mono); font-size: 0.66rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--accent);
+  border: 1px solid var(--border-accent); border-radius: 4px; padding: 1px 6px; margin-right: 6px;
+}
+
 .fade-black {
   position: fixed; inset: 0; z-index: 90;
   background: #000;
@@ -655,20 +1107,256 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.25); }
   .btn-menu { width: 84vw; }
   .panel { padding: var(--space-4); }
   .settings-row { flex-direction: column; align-items: flex-start; }
-  .settings-row .control { width: 100%; justify-content: space-between; }
+  .settings-row .control { width: 100%; justify-content: space-between; min-width: 0; }
+  .menu-secondary { grid-template-columns: repeat(2, 1fr); }
+  .dialogue-box { bottom: 24px; }
+  .hud-objective, .hud-briefing { max-width: min(72vw, 380px); }
+  /* Tab bars (settings, manual) wrap instead of overflowing the width. */
+  .tabs { flex-wrap: wrap; gap: 6px; border-bottom: none; }
+  .tab { padding: 8px 14px; font-size: 0.76rem; border: 1px solid var(--border-ghost); border-radius: var(--radius-sm); }
+  .tab.active { border-color: var(--accent); }
 }
 
-/* Short windows: compress the menu so nothing clips off-screen */
-@media (max-height: 820px) {
-  .title-hero { font-size: clamp(1.6rem, 4.5vh, 3rem); }
-  .menu-layout { margin-top: var(--space-3); }
-  .btn-menu { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
-}
-@media (max-height: 620px) {
-  .subtitle { display: none; }
-  .btn-menu { min-height: 34px; font-size: 0.9rem; }
+/* Phones: keep everything inside the safe area, tighten the menu, and make
+   sure the primary actions are comfortably tappable. */
+@media (max-width: 480px) {
+  html, body { font-size: 15px; }
+  .screen { padding: env(safe-area-inset-top) env(safe-area-inset-right)
+              env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .title-hero { font-size: clamp(1.9rem, 9vw, 3rem); }
+  .subtitle { letter-spacing: 0.28em; font-size: 0.72rem; }
+  .menu-primary { width: min(360px, 92vw); }
+  .menu-primary .btn-menu { min-height: 50px; }
+  .menu-secondary { width: 92vw; }
+  .btn-tile { min-height: 60px; }
+  .menu-footer { flex-direction: column; gap: 4px; text-align: center; padding: 8px 12px; }
+  .menu-footer .account-status { text-align: center; }
+  .panel { width: 94vw; max-height: calc(100dvh - 24px); }
+  .puzzle-panel, .note-paper, .dialogue-box { width: 94vw; }
+  .keypad-grid .btn { min-height: 56px; }
+  .symbol-btn { width: 60px; height: 60px; font-size: 1.6rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* =============================================================
+   TOUCH CONTROLS — on-screen joystick + look pad + buttons.
+   Rendered only on touch devices; visibility follows gameplay.
+   ============================================================= */
+.touch-controls {
+  position: fixed; inset: 0; z-index: 20;
+  pointer-events: none;               /* children opt back in */
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--dur-med) var(--ease-out);
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-controls.visible { opacity: 1; visibility: visible; }
+
+/* Right-half drag area for looking around (sits under the buttons) */
+.tc-look {
+  position: absolute; top: 0; right: 0;
+  width: 62%; height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Left virtual joystick */
+.tc-joy {
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: 132px; height: 132px;
+  pointer-events: auto;
+  touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.tc-joy-base {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(232,230,227,0.08), rgba(7,7,12,0.35));
+  border: 1.5px solid rgba(201, 162, 39, 0.35);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.4), 0 4px 20px rgba(0,0,0,0.5);
+}
+.tc-joy-thumb {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(232, 197, 71, 0.9), rgba(168, 134, 31, 0.7));
+  border: 1px solid rgba(232, 197, 71, 0.6);
+  box-shadow: 0 0 18px rgba(201, 162, 39, 0.5);
+  will-change: transform;
+}
+
+/* Action buttons */
+.tc-btn {
+  pointer-events: auto;
+  touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em;
+  color: var(--fg-primary);
+  background: rgba(14, 14, 24, 0.6);
+  border: 1.5px solid var(--border-accent);
+  border-radius: 50%;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  transition: transform 90ms var(--ease-out), background 90ms var(--ease-out);
+}
+.tc-btn.pressed { transform: scale(0.9); background: rgba(201, 162, 39, 0.35); }
+.tc-btn.active { background: rgba(201, 162, 39, 0.28); border-color: var(--accent); }
+
+/* Bottom-right action cluster: torch/jump/sprint/crouch in a 2×2 block with
+   the big INTERACT button on the right. Sprint & crouch live here (not on the
+   left) so the entire left side is free for the joystick + objective HUD. */
+.tc-actions {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    "torch  jump   interact"
+    "sprint crouch interact";
+  gap: 11px;
+  align-items: center; justify-items: center;
+}
+.tc-torch  { grid-area: torch;  width: 58px; height: 58px; font-size: 1.25rem; }
+.tc-jump   { grid-area: jump;   width: 58px; height: 58px; }
+.tc-sprint { grid-area: sprint; width: 58px; height: 58px; font-size: 0.62rem; }
+.tc-crouch { grid-area: crouch; width: 58px; height: 58px; font-size: 0.56rem; }
+.tc-interact {
+  grid-area: interact;
+  width: 82px; height: 82px;
+  font-size: 1.4rem;
+  color: var(--bg-void);
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  border-color: var(--accent-bright);
+  box-shadow: 0 0 24px rgba(201, 162, 39, 0.5);
+}
+
+.tc-top-btns {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex; gap: 10px;
+}
+.tc-mini { width: 44px; height: 44px; font-size: 1.05rem; border-radius: var(--radius-sm); }
+
+/* Small phones: shrink the cluster a touch */
+@media (max-height: 400px), (max-width: 700px) {
+  .tc-joy { width: 112px; height: 112px; }
+  .tc-joy-thumb { width: 48px; height: 48px; }
+  .tc-interact { width: 70px; height: 70px; }
+  .tc-torch, .tc-jump, .tc-sprint, .tc-crouch { width: 50px; height: 50px; }
+  .tc-actions { gap: 9px; }
+}
+
+/* Landscape nudge: FPS plays best in landscape — hint on portrait phones */
+#orientation-hint {
+  position: fixed; inset: 0; z-index: 200;
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; padding: 32px;
+  text-align: center;
+  background: var(--bg-void);
+  color: var(--fg-secondary);
+}
+#orientation-hint .rot { font-size: 3rem; animation: rot-spin 2.4s var(--ease-in-out) infinite; }
+#orientation-hint p { max-width: 320px; line-height: 1.6; }
+@keyframes rot-spin { 0%, 60%, 100% { transform: rotate(0); } 80% { transform: rotate(-90deg); } }
+@media (orientation: portrait) {
+  body.touch-mode #orientation-hint.armed { display: flex; }
+}
+
+/* =============================================================
+   TOUCH-MODE IN-GAME HUD  (body.touch-mode = on-screen controls active)
+   Class-driven (NOT width-gated) so it applies to every touch device —
+   phone or tablet — regardless of screen width. Each widget gets a lane
+   that never overlaps the joystick / action buttons:
+     · objective  → top-left, below the title band
+     · room title → single line, top-centre (transient)
+     · countdown  → pill under the title, centred
+     · briefing   → compact card, bottom-centre (above the controls)
+     · toasts     → centred, above the briefing
+     · sanity/flashlight → right edge, below the menu buttons
+     · compass / timer / fps → hidden (de-clutter)
+   ============================================================= */
+body.touch-mode .hud-objective {
+  top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+  left: max(8px, env(safe-area-inset-left));
+  max-width: 38vw; padding: 7px 11px;
+}
+body.touch-mode .hud-objective .label { font-size: 0.52rem; letter-spacing: 0.12em; margin-bottom: 2px; }
+body.touch-mode .hud-objective p { font-size: 0.7rem; line-height: 1.3; }
+
+body.touch-mode .hud-room-title { top: max(6px, env(safe-area-inset-top)); }
+body.touch-mode .hud-room-title h2 { font-size: 1.15rem; letter-spacing: 0.1em; white-space: nowrap; }
+body.touch-mode .hud-room-title p { font-size: 0.56rem; }
+
+body.touch-mode .hud-countdown { top: 50px; font-size: 0.9rem; padding: 3px 12px; }
+
+body.touch-mode .hud-briefing {
+  top: auto;
+  bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px));
+  left: 50%; right: auto; transform: translateX(-50%);
+  width: min(46vw, 440px); max-width: 46vw;
+  max-height: 108px; overflow: hidden;
+  padding: 8px 14px; text-align: center;
+  border-left: none; border-top: 3px solid var(--accent);
+}
+body.touch-mode .hud-briefing .brief-text { font-size: 0.72rem; line-height: 1.32; }
+body.touch-mode .hud-briefing .brief-tip { font-size: 0.66rem; margin-top: 4px; }
+
+body.touch-mode .hud-toast-stack { bottom: 208px; width: 60vw; }
+body.touch-mode .toast { font-size: 0.74rem; padding: 6px 14px; text-align: center; }
+body.touch-mode .hud-captions { bottom: 250px; }
+
+/* Survival meters → right edge, stacked below the menu buttons, clear of the
+   bottom-right action cluster. Stamina stays a thin bar at the very bottom. */
+body.touch-mode .hud-sanity {
+  top: calc(max(12px, env(safe-area-inset-top)) + 46px); bottom: auto;
+  right: max(12px, env(safe-area-inset-right)); left: auto;
+}
+body.touch-mode .hud-flashlight {
+  top: calc(max(12px, env(safe-area-inset-top)) + 84px); bottom: auto;
+  right: max(12px, env(safe-area-inset-right));
+}
+body.touch-mode .hud-stamina { bottom: 8px; }
+
+body.touch-mode .hud-compass,
+body.touch-mode .hud-timer,
+body.touch-mode .hud-fps { display: none !important; }
+
+/* Short-landscape touch (phone held sideways) — tighten vertical stacks. */
+@media (max-height: 430px) {
+  body.touch-mode .hud-room-title h2 { font-size: 1rem; }
+  body.touch-mode .hud-briefing { bottom: 76px; width: min(38vw, 300px); max-width: 38vw; max-height: 92px; padding: 6px 12px; }
+  body.touch-mode .hud-briefing .brief-text { font-size: 0.68rem; }
+  body.touch-mode .hud-toast-stack { bottom: 176px; width: 46vw; }
+  body.touch-mode .hud-captions { bottom: 214px; }
+  body.touch-mode .hud-flashlight { top: calc(max(12px, env(safe-area-inset-top)) + 78px); }
+}
+
+/* Portrait touch: stack the messages high, above the joystick, and let the
+   "rotate device" hint (shown in portrait) cover play. */
+@media (orientation: portrait) {
+  body.touch-mode .hud-objective { max-width: 52vw; }
+  body.touch-mode .hud-briefing { bottom: 220px; width: min(82vw, 440px); max-width: 82vw; }
+  body.touch-mode .hud-toast-stack { bottom: 340px; width: 82vw; }
+  body.touch-mode .hud-countdown { top: 96px; }
+}
+
+/* Short landscape: compress the pause menu so all options fit without scroll. */
+@media (max-height: 520px) {
+  #pause-menu .heading { font-size: 1.4rem !important; margin-bottom: 2px !important; }
+  #pause-menu .subtitle { display: none; }
+  #pause-menu .menu-layout { gap: 5px; }
+  #pause-menu .btn-menu {
+    min-height: 34px; padding-top: 5px; padding-bottom: 5px;
+    font-size: 0.9rem; letter-spacing: 0.14em;
+  }
 }

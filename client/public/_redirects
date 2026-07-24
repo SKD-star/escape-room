@@ -1,0 +1,14 @@
+# Netlify redirects — proxy the API and admin dashboard to the Render backend
+# so the browser stays same-origin (no CORS) and ApiClient's BASE='/api' works.
+#
+# 1) Deploy the backend first (see DEPLOY.md), then copy its URL, e.g.
+#      https://escape-room-api.onrender.com
+# 2) Replace BACKEND_URL below with that URL (no trailing slash).
+# 3) Re-run `npm run build` and re-drop client/dist on Netlify.
+#
+# Until you set BACKEND_URL, the proxy simply fails and the game runs fully
+# offline (single-player) — which is the correct Phase-1 behaviour.
+
+/api/*    BACKEND_URL/api/:splat     200
+/admin    BACKEND_URL/admin/         200
+/admin/*  BACKEND_URL/admin/:splat   200

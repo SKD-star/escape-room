@@ -10,6 +10,10 @@ bcrypt>=4.1
 pyjwt>=2.8
 openai>=1.50
 
+# Production hosting (Render/Heroku etc.)
+gunicorn>=21.2        # WSGI server for production
+psycopg2-binary>=2.9  # PostgreSQL driver (Render free database)
+
 # Optional extras (not required by the game server):
 #   openai-whisper  — speech-to-text experiments (pulls in torch, ~2 GB)
 #   flask-login     — session-based auth alternative (game uses JWT)

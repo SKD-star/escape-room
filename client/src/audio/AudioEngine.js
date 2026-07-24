@@ -8,6 +8,7 @@
  */
 import { bus, Events } from '../core/EventBus.js';
 import { settings } from '../config/settings.js';
+import { THEME_SURFACE } from '../config/constants.js';
 
 export class AudioEngine {
   constructor() {
@@ -16,10 +17,16 @@ export class AudioEngine {
     this.ambienceNodes = [];
     this.heartbeatTimer = null;
     this.started = false;
+    this.surface = 'stone'; // per-room footstep material
 
     bus.on(Events.PLAY_SOUND, ({ name, volume = 1, position = null }) =>
       this.play(name, volume, position));
-    bus.on(Events.AMBIENCE_CHANGE, (theme) => this.setAmbience(theme));
+    bus.on(Events.AMBIENCE_CHANGE, (theme) => {
+      this.surface = THEME_SURFACE[theme] ?? 'stone';
+      this.setAmbience(theme);
+    });
+    // Dynamic tension layer: dissonant pad that swells with haunt proximity
+    bus.on('haunt:proximity', (level) => this.setTension(level));
     bus.on('settings:changed', ({ name }) => {
       if (name.endsWith('Volume')) this.applyVolumes();
     });
@@ -104,8 +111,56 @@ export class AudioEngine {
     if (!this.ctx) return;
     const v = volume;
     switch (name) {
-      case 'footstep':
-        this.noiseBurst({ freq: 180 + Math.random() * 120, q: 1.4, decay: 0.09, peak: 0.24 * v });
+      case 'footstep': {
+        // Per-surface synthesis: wood knocks, stone scuffs, tile clicks,
+        // metal rings faintly.
+        const surfaces = {
+          wood: { freq: 140 + Math.random() * 80, q: 1.1, decay: 0.11, peak: 0.26, knock: 90 },
+          stone: { freq: 220 + Math.random() * 120, q: 1.6, decay: 0.09, peak: 0.24, knock: 0 },
+          tile: { freq: 900 + Math.random() * 400, q: 2.4, decay: 0.06, peak: 0.18, knock: 0 },
+          metal: { freq: 320 + Math.random() * 90, q: 4, decay: 0.16, peak: 0.2, knock: 0, ring: 480 },
+        };
+        const s = surfaces[this.surface] ?? surfaces.stone;
+        this.noiseBurst({ freq: s.freq, q: s.q, decay: s.decay, peak: s.peak * v });
+        if (s.knock) this.tone({ freq: s.knock, type: 'sine', decay: 0.07, peak: 0.1 * v });
+        if (s.ring) this.tone({ freq: s.ring + Math.random() * 60, type: 'sine', decay: 0.22, peak: 0.03 * v });
+        break;
+      }
+      case 'land':
+        this.noiseBurst({ freq: 150, q: 1, decay: 0.16, peak: 0.35 * v });
+        this.tone({ freq: 60, type: 'sine', decay: 0.18, peak: 0.25 * v });
+        break;
+      case 'flashlight_click':
+        this.noiseBurst({ freq: 2600, q: 4, attack: 0.001, decay: 0.03, peak: 0.22 * v });
+        this.tone({ freq: 1200, type: 'square', decay: 0.02, peak: 0.05 * v });
+        break;
+      case 'flashlight_flicker':
+        this.noiseBurst({ freq: 3400, q: 6, attack: 0.001, decay: 0.02, peak: 0.05 * v });
+        break;
+      case 'flashlight_dead':
+        this.tone({ freq: 620, type: 'square', decay: 0.05, peak: 0.08 * v });
+        this.tone({ freq: 240, type: 'square', decay: 0.12, peak: 0.06 * v, when: 0.07 });
+        break;
+      case 'battery':
+        this.tone({ freq: 660, type: 'triangle', decay: 0.12, peak: 0.14 * v, slideTo: 990 });
+        break;
+      case 'scare': {
+        // dissonant sting: detuned saws + rumble, short and violent
+        for (const f of [190, 197, 288]) {
+          this.tone({ freq: f, type: 'sawtooth', attack: 0.01, decay: 0.9, peak: 0.16 * v, out: 'voice' });
+        }
+        this.noiseBurst({ freq: 90, q: 0.8, attack: 0.01, decay: 1.1, peak: 0.4 * v, type: 'lowpass' });
+        break;
+      }
+      case 'manifest':
+        // reversed-feeling swell: rising filtered noise + minor-second dyad
+        this.noiseBurst({ freq: 600, q: 0.6, attack: 1.4, decay: 0.4, peak: 0.12 * v, type: 'bandpass', out: 'voice' });
+        this.tone({ freq: 220, type: 'sine', attack: 1.2, decay: 0.8, peak: 0.07 * v, out: 'voice' });
+        this.tone({ freq: 233, type: 'sine', attack: 1.2, decay: 0.8, peak: 0.07 * v, out: 'voice' });
+        break;
+      case 'camera_shutter':
+        this.noiseBurst({ freq: 3000, q: 3, attack: 0.001, decay: 0.04, peak: 0.2 * v });
+        this.noiseBurst({ freq: 1800, q: 2, attack: 0.001, decay: 0.05, peak: 0.12 * v, when: 0.06 });
         break;
       case 'jump':
         this.noiseBurst({ freq: 300, decay: 0.15, peak: 0.2 * v });
@@ -188,6 +243,31 @@ export class AudioEngine {
   }
 
   // -- ambience -----------------------------------------------------------
+
+  /**
+   * Tension pad: two detuned oscillators a tritone apart whose gain follows
+   * the presence's proximity. Created lazily, reused across rooms.
+   */
+  setTension(level) {
+    if (!this.ctx) return;
+    if (!this.tensionGain) {
+      this.tensionGain = this.ctx.createGain();
+      this.tensionGain.gain.value = 0;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 700;
+      filter.connect(this.tensionGain).connect(this.buses.music);
+      for (const f of [110, 155.5, 156.6]) { // root + detuned tritone pair
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = f;
+        osc.connect(filter);
+        osc.start();
+      }
+    }
+    const target = Math.min(0.06, level * 0.06);
+    this.tensionGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.6);
+  }
 
   stopAmbience() {
     for (const node of this.ambienceNodes) {

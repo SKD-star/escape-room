@@ -37,11 +37,13 @@ Three tiers (full diagram in `ARCHITECTURE.md`):
   pipeline with ACES tone mapping). A global `EventBus` decouples ~15
   subsystems; no gameplay system imports another directly.
 - **Server** — Flask app factory with three API blueprints (auth, game, ai)
-  plus an admin dashboard blueprint. JWT auth (24 h), bcrypt passwords,
-  per-IP rate limiting, strict input validation.
+  plus an admin dashboard blueprint (room add/edit/reorder/delete, an authored
+  puzzle bank served in-game, live-player monitoring, analytics, AI logs and
+  leaderboard moderation). JWT auth (24 h), bcrypt passwords, per-IP rate
+  limiting, strict input validation.
 - **Data** — SQLAlchemy over MySQL (SQLite fallback for development).
-  11 tables covering users, saves, achievements, leaderboard, analytics,
-  puzzle history, AI logs, rooms and settings.
+  12 tables covering users, saves, achievements, leaderboard, analytics,
+  puzzle history, AI logs, an authored puzzle bank, rooms and settings.
 
 ## 4. Key Technical Decisions
 
@@ -58,8 +60,9 @@ Three tiers (full diagram in `ARCHITECTURE.md`):
 
 - **Puzzle generation** — JSON-mode chat completions with a strict schema
   (type, narrative, solution fields). Responses validated; malformed output
-  falls back to the procedural generator. Every call logged (`ai_logs`) with
-  provider, latency and success for admin review.
+  falls back to an **admin-authored puzzle bank** (matched to theme and
+  difficulty) and then to the procedural generator. Every call logged
+  (`ai_logs`) with provider, latency and success for admin review.
 - **Hints** — 3 escalating tiers (cryptic → directional → near-answer),
   generated against the actual puzzle JSON.
 - **NPC dialogue** — each room has a themed spirit with a character system
@@ -79,12 +82,22 @@ Three tiers (full diagram in `ARCHITECTURE.md`):
   (impulse into Rapier dynamic body).
 - **Puzzles:** keypad, riddle (free-text with fuzzy match), symbol sequence;
   diegetic clue drip via toasts/notes after 45 s.
+- **Room countdown:** per-room clock on Normal/Nightmare, its limit scaled by
+  level and difficulty, ticking through the puzzle modal. Normal timeout is
+  soft (sanity overtime); Nightmare timeout is a hard deadline that reloads the
+  room fresh. Story has no clock; toggleable in settings.
+- **Player guidance:** a per-level briefing card on room entry and a full
+  in-game Field Manual (Controls / Survival / Puzzles / Chapters / Tips),
+  generated from the same room data so briefings and timings stay in sync.
 - **Inventory:** collection, inspection lore text, pairwise combination
   recipes; combined items gate the true ending.
 - **Endings:** standard / true (crafted memento) / dark (hint overuse) —
   submitted to the leaderboard with score formula rooms×1000 + puzzles×250 −
   time/6 − hints×100.
-- **Achievements:** 12 (2 secret), unlocked locally and synced.
+- **Achievements:** 13 (3 secret), unlocked locally and synced.
+- **Admin dashboard:** live stats + active-player monitor, room CRUD with
+  drag-free up/down reordering, an authored puzzle bank served in-game, puzzle
+  analytics, AI logs, event stream, and leaderboard moderation.
 
 ## 7. The Ten Rooms
 
@@ -127,7 +140,7 @@ ten floating doors, an eye entity that tracks the camera, storm lightning).
 ## 10. Limitations & Future Work
 
 - Physics colliders are box approximations; convex hulls would improve throws.
-- Multiplayer (socket.io is already a dependency) — co-op puzzle solving.
+- Multiplayer (e.g. socket.io) — co-op puzzle solving.
 - Whisper integration for voice-controlled NPC dialogue.
 - GLB asset pipeline is implemented (Draco-capable loader + cache) but ships
   no external models; curated CC0 packs would raise visual fidelity further.

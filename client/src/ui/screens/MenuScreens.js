@@ -21,6 +21,8 @@ export class PauseMenu {
           <button class="btn btn-menu" data-action="resume">Resume</button>
           <button class="btn btn-menu" data-action="save">Save Game</button>
           <button class="btn btn-menu" data-action="objectives">Objectives</button>
+          <button class="btn btn-menu" data-action="journal">Journal</button>
+          <button class="btn btn-menu" data-action="manual">Manual</button>
           <button class="btn btn-menu" data-action="settings">Settings</button>
           <button class="btn btn-menu btn-danger" data-action="quit">Quit to Menu</button>
         </nav>
@@ -32,6 +34,8 @@ export class PauseMenu {
         case 'resume': handlers.onResume(); break;
         case 'save': screens.show('save-load', { mode: 'save' }); break;
         case 'objectives': screens.show('objectives'); break;
+        case 'journal': screens.show('journal'); break;
+        case 'manual': screens.show('manual', { returnTo: 'pause-menu' }); break;
         case 'settings': screens.show('settings', { returnTo: 'pause-menu' }); break;
         case 'quit': handlers.onQuit(); break;
       }
@@ -56,7 +60,7 @@ export class CreditsScreen {
             <div><p class="label">Engine</p><p>Three.js · Rapier Physics · postprocessing</p></div>
             <div><p class="label">Backend</p><p>Flask · SQLAlchemy · OpenAI</p></div>
             <div><p class="label">Animation & UI</p><p>GSAP · Custom glassmorphism design system</p></div>
-            <div><p class="label">Audio</p><p>Procedural WebAudio synthesis · Howler.js</p></div>
+            <div><p class="label">Audio</p><p>Procedural WebAudio synthesis</p></div>
             <div class="divider"></div>
             <p style="font-size:0.8rem;color:var(--fg-muted)">All assets generated procedurally — no copyrighted material.<br/>Built with respect for every open-source license involved.</p>
           </div>

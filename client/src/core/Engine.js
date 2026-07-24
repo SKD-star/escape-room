@@ -22,6 +22,11 @@ import { settings } from '../config/settings.js';
 import { bus, Events } from './EventBus.js';
 
 export class Engine {
+  /** Map the 0.5–1.6 brightness setting onto a safe exposure range. */
+  static exposureFor(brightness = 1) {
+    return THREE.MathUtils.clamp(brightness * 1.2, 0.6, 1.7);
+  }
+
   /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
     this.canvas = canvas;
@@ -37,7 +42,9 @@ export class Engine {
       depth: true,
     });
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = settings.get('brightness');
+    // Balanced base lift; the brightness setting is clamped so stacked
+    // boosts can never blow the frame out to white.
+    this.renderer.toneMappingExposure = Engine.exposureFor(settings.get('brightness'));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = this.quality.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -71,7 +78,7 @@ export class Engine {
     bus.on(Events.QUALITY_CHANGED, (name) => this.setQuality(name));
     bus.on('settings:changed', ({ name, value }) => {
       if (name === 'fov') { this.camera.fov = value; this.camera.updateProjectionMatrix(); }
-      if (name === 'brightness') this.renderer.toneMappingExposure = value;
+      if (name === 'brightness') this.renderer.toneMappingExposure = Engine.exposureFor(value);
     });
     this.onResize();
   }
@@ -155,20 +162,23 @@ export class Engine {
       effects.push(this.dof);
     }
 
-    // Horror color grade: slight desaturation, lifted contrast, cold hue
-    effects.push(new HueSaturationEffect({ saturation: -0.14, hue: 0.0 }));
-    effects.push(new BrightnessContrastEffect({ brightness: -0.02, contrast: 0.08 }));
-    effects.push(new ChromaticAberrationEffect({
-      offset: new THREE.Vector2(0.0006, 0.0006),
+    // Horror color grade: gentle desaturation, mild contrast — kept light
+    // so the image stays crisp and readable.
+    effects.push(new HueSaturationEffect({ saturation: -0.08, hue: 0.0 }));
+    effects.push(new BrightnessContrastEffect({ brightness: 0.02, contrast: 0.06 }));
+    this.chroma = new ChromaticAberrationEffect({
+      offset: new THREE.Vector2(0.0003, 0.0003),
       radialModulation: true,
-      modulationOffset: 0.4,
-    }));
+      modulationOffset: 0.5,
+    });
+    effects.push(this.chroma);
     if (q.filmGrain) {
       const noise = new NoiseEffect({ blendFunction: BlendFunction.COLOR_DODGE });
-      noise.blendMode.opacity.value = 0.045;
+      noise.blendMode.opacity.value = 0.025;
       effects.push(noise);
     }
-    effects.push(new VignetteEffect({ darkness: 0.62, offset: 0.28 }));
+    this.vignette = new VignetteEffect({ darkness: 0.42, offset: 0.2 });
+    effects.push(this.vignette);
     effects.push(new FXAAEffect());
 
     // postprocessing merges consecutive effects into single shader passes

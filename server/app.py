@@ -58,8 +58,42 @@ def create_app(config_class=Config) -> Flask:
     with app.app_context():
         import models  # noqa: F401 — register models
         db.create_all()
+        _bootstrap(app)
 
     return app
+
+
+def _bootstrap(app: Flask) -> None:
+    """First-run data setup for hosted deploys — no shell access required.
+
+    Enabled by AUTO_BOOTSTRAP=1 (set on Render). Idempotent, so it is safe to
+    run on every boot: seeds reference data and ensures an admin account from
+    ADMIN_USERNAME / ADMIN_PASSWORD env vars. Never blocks boot on failure.
+    """
+    import os
+    if not os.getenv("AUTO_BOOTSTRAP"):
+        return
+    try:
+        from scripts.seed import seed_reference
+        seed_reference()
+    except Exception as exc:  # pragma: no cover — best-effort
+        app.logger.warning("bootstrap seed skipped: %s", exc)
+
+    password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if len(password) >= 8:
+        from models import User
+        username = os.getenv("ADMIN_USERNAME", "admin").strip() or "admin"
+        email = os.getenv("ADMIN_EMAIL", "admin@escaperoom.local").strip()
+        user = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
+        if not user:
+            user = User(username=username, email=email, role="admin")
+            db.session.add(user)
+        user.role = "admin"
+        user.set_password(password)
+        db.session.commit()
+        app.logger.info("bootstrap: admin '%s' ensured", username)
 
 
 if __name__ == "__main__":

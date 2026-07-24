@@ -11,7 +11,7 @@
 │  │ (HTML/CSS/ │  │  ┌─────────┐ ┌──────────┐ ┌──────────────┐   │   │
 │  │  GSAP)     │  │  │ Renderer│ │ Physics  │ │ Audio Engine │   │   │
 │  │            │  │  │ Three.js│ │ Rapier   │ │ WebAudio/    │   │   │
-│  │ MainMenu   │  │  │ + post- │ │ (WASM)   │ │ Howler       │   │   │
+│  │ MainMenu   │  │  │ + post- │ │ (WASM)   │ │ WebAudio     │   │   │
 │  │ HUD        │◄─┼─►│ process │ └──────────┘ └──────────────┘   │   │
 │  │ Inventory  │  │  └─────────┘ ┌──────────┐ ┌──────────────┐   │   │
 │  │ Settings   │  │  ┌─────────┐ │ Player   │ │ Room Manager │   │   │
@@ -61,18 +61,18 @@
 
 | Module        | Responsibility |
 |---------------|----------------|
-| `core/`       | Engine, Renderer, AssetManager, EventBus, GameLoop, QualityManager |
-| `player/`     | FPSController, InteractionSystem, ObjectInspector |
-| `world/`      | RoomManager, 10 room classes, props, materials, particles, lighting rigs |
+| `core/`       | Engine, Renderer, AssetManager, EventBus, GameLoop, QualityManager, PhotoMode |
+| `player/`     | FPSController, InteractionSystem, ObjectInspector, Flashlight, SanitySystem, HauntSystem, LevelTimer (room countdown), SpeedrunTimer, GamepadInput |
+| `world/`      | RoomManager, 10 room classes, HauntSystem, props, materials, particles, lighting rigs |
 | `puzzles/`    | PuzzleManager + typed puzzles (keypad, riddle, symbols, wiring, …) |
 | `inventory/`  | Inventory model + UI + item combination |
 | `audio/`      | AudioEngine (3D positional, procedural synth ambience) |
 | `ai/`         | AIClient (talks to server AI endpoints, local fallback) |
 | `save/`       | SaveManager (localStorage + cloud sync) |
-| `ui/`         | Screen manager, all menus/HUD |
+| `ui/`         | Screen manager, all menus/HUD, in-game Field Manual, Journal, Stats, per-level briefing card |
 | `net/`        | ApiClient (fetch wrapper w/ JWT) |
 | `utils/`      | Math helpers, logger, device detection |
-| `config/`     | Game constants, quality presets, room definitions |
+| `config/`     | Game constants, quality presets, room definitions (per-room `par`/`brief`/`tip`), difficulty modes |
 
 ## Server Module Map (`server/`)
 
@@ -81,11 +81,11 @@
 | `app.py`          | App factory, blueprint registration, CORS |
 | `config.py`       | Env-driven config (MySQL → SQLite fallback) |
 | `extensions.py`   | db, login_manager singletons |
-| `models/`         | User, Save, Achievement, LeaderboardEntry, AnalyticsEvent, PuzzleRecord, AILog, RoomMeta, UserSetting |
+| `models/`         | User, Save, Achievement, LeaderboardEntry, AnalyticsEvent, PuzzleRecord, AILog, PuzzleBank, RoomMeta, UserSetting |
 | `api/`            | auth, saves, leaderboard, achievements, analytics, ai, settings blueprints |
-| `services/`       | ai_service (OpenAI + fallback), difficulty engine, email service |
-| `admin/`          | Server-rendered admin dashboard (Jinja2) |
-| `scripts/`        | init_db, seed, create_admin |
+| `services/`       | ai_service (OpenAI + fallback, prefers authored PuzzleBank), difficulty engine, email service |
+| `admin/`          | Server-rendered admin dashboard (Jinja2): room add/edit/reorder/delete, puzzle bank CRUD, live-player monitor, stats, analytics, AI logs, event stream, leaderboard moderation |
+| `scripts/`        | init_db, seed, create_admin (run via `scripts/py.js`, a cross-platform venv launcher) |
 
 ## Data Flow: AI Puzzle Generation
 
@@ -94,10 +94,34 @@ Player enters room → RoomManager fires `room:entered`
  → PuzzleManager requests puzzle → AIClient POST /api/ai/puzzle
    { room_theme, difficulty, player_stats }
  → ai_service: OPENAI_API_KEY set?  → OpenAI JSON-mode completion
-                              else  → procedural template generator
+                              else  → authored PuzzleBank entry (admin-written,
+                                       matched to theme + difficulty) if present,
+                                       otherwise the procedural template generator
  → response validated against puzzle schema → logged to ai_logs
  → PuzzleManager instantiates typed puzzle → props wired in 3D scene
 ```
+
+## Server-driven Campaign
+
+The playable room list is authoritative on the server. On New Game / Continue
+the client calls `GET /api/rooms` (public) for the admin-defined order and
+enabled set, and plays it via `config/campaign.js`. Built-in keys reuse their
+rich static data (chapter, par, briefing); admin-authored custom rooms are
+synthesized and played in the 3D environment of their theme (RoomManager's
+`THEME_CLASSES` map). If the server is unreachable, the client falls back to its
+built-in 10-room list, so offline play is unaffected. Reordering, enabling,
+disabling or adding rooms in the admin therefore changes the real campaign the
+next time a player starts.
+
+## Room Countdown (LevelTimer)
+
+On Normal and Nightmare a per-room clock runs, its limit = `ROOMS[key].par ×
+difficulty.countdown.mult`, so it scales per level and per difficulty. It keeps
+ticking while the puzzle modal is open (pausing only in menus / notes /
+dialogue). On **Normal** timeout is soft (overtime drains sanity); on
+**Nightmare** timeout is a hard deadline — the current room reloads fresh
+(`Game.failRoom()`), while cleared rooms are untouched. Story has no clock. The
+whole feature is toggleable via the `countdownTimer` setting.
 
 ## Adaptive Difficulty
 

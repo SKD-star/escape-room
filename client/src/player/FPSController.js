@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { PLAYER } from '../config/constants.js';
 import { settings } from '../config/settings.js';
 import { bus, Events } from '../core/EventBus.js';
+import { isTouchDevice } from '../config/device.js';
 
 const KEYS = {
   forward: ['KeyW', 'ArrowUp'],
@@ -54,6 +55,12 @@ export class FPSController {
     this.stepAccum = 0;
     this.shake = 0;
     this.moveSpeed = 0;
+    this.roll = 0;          // strafe camera tilt
+    this.landDip = 0;       // camera dip after landing
+    this.fallTime = 0;      // airtime for landing weight
+    this.fovKick = 0;       // sprint FOV widening
+    this.zooming = false;   // RMB focus zoom
+    this.zoom = 0;          // 0..1 zoom blend
 
     this.bindEvents();
   }
@@ -68,7 +75,8 @@ export class FPSController {
 
     document.addEventListener('mousemove', (e) => {
       if (!this.enabled || document.pointerLockElement === null) return;
-      const sens = PLAYER.MOUSE_SENSITIVITY * settings.get('mouseSensitivity');
+      const sens = PLAYER.MOUSE_SENSITIVITY * settings.get('mouseSensitivity')
+        * (1 - this.zoom * 0.55); // steadier aim while focusing
       const invert = settings.get('invertY') ? -1 : 1;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens * invert;
@@ -81,6 +89,17 @@ export class FPSController {
       }
     });
 
+    // Focus zoom: hold right mouse to lean in and study details
+    document.addEventListener('mousedown', (e) => {
+      if (e.button === 2 && this.enabled && document.pointerLockElement) this.zooming = true;
+    });
+    document.addEventListener('mouseup', (e) => {
+      if (e.button === 2) this.zooming = false;
+    });
+    document.addEventListener('contextmenu', (e) => {
+      if (this.enabled || document.pointerLockElement) e.preventDefault();
+    });
+
     bus.on('camera:shake', (strength = 1) => { this.shake = Math.min(2, this.shake + strength); });
   }
 
@@ -90,7 +109,31 @@ export class FPSController {
 
   enable() {
     this.enabled = true;
-    this.engine.canvas.requestPointerLock?.();
+    this.requestLock();
+  }
+
+  /**
+   * Pointer lock needs a recent user gesture. When the intro ends on its
+   * own timer there is none, so the request rejects — in that case show a
+   * "click to look around" prompt and retry on the next click.
+   */
+  requestLock() {
+    // Touch devices don't use pointer lock — TouchControls drives look/move.
+    if (isTouchDevice()) return;
+    if (document.pointerLockElement) return;
+    const attempt = this.engine.canvas.requestPointerLock?.();
+    // Chrome returns a promise that rejects without a fresh gesture
+    Promise.resolve(attempt).catch(() => {
+      bus.emit(Events.TOAST, { text: 'Click anywhere to take control.', duration: 5000 });
+    });
+    if (!this.clickToLockBound) {
+      this.clickToLockBound = true;
+      document.addEventListener('mousedown', () => {
+        if (this.enabled && !document.pointerLockElement) {
+          this.engine.canvas.requestPointerLock?.();
+        }
+      });
+    }
   }
 
   disable() {
@@ -173,7 +216,17 @@ export class FPSController {
       z: pos.z + corrected.z,
     });
 
+    const wasGrounded = this.grounded;
     this.grounded = this.controller.computedGrounded();
+    if (!this.grounded) this.fallTime += dt;
+    if (this.grounded && !wasGrounded && this.fallTime > 0.18) {
+      // landing: thud + camera dip scaled by airtime
+      const weight = Math.min(1, this.fallTime / 0.8);
+      this.landDip = Math.max(this.landDip, 0.05 + weight * 0.09);
+      bus.emit(Events.PLAY_SOUND, { name: 'land', volume: 0.4 + weight * 0.6 });
+      if (weight > 0.6) bus.emit('camera:shake', weight * 0.5);
+    }
+    if (this.grounded) this.fallTime = 0;
     if (this.grounded && this.velocityY < 0) this.velocityY = -0.5;
 
     // -- camera placement -------------------------------------------------
@@ -198,6 +251,25 @@ export class FPSController {
     // breathing sway (always, subtle)
     const breath = Math.sin(performance.now() * 0.0011) * 0.006;
 
+    // landing dip recovery
+    this.landDip = THREE.MathUtils.damp(this.landDip, 0, 9, dt);
+
+    // strafe roll: lean slightly into sideways motion
+    const strafe = (this.isDown('right') ? 1 : 0) - (this.isDown('left') ? 1 : 0);
+    const targetRoll = moving && this.grounded ? -strafe * 0.018 : 0;
+    this.roll = THREE.MathUtils.damp(this.roll, targetRoll, 8, dt);
+
+    // sprint FOV kick (speed sensation) + focus zoom (RMB narrows the lens)
+    const targetKick = wantSprint ? 5 : 0;
+    this.fovKick = THREE.MathUtils.damp(this.fovKick, targetKick, 5, dt);
+    this.zoom = THREE.MathUtils.damp(this.zoom, this.zooming ? 1 : 0, 10, dt);
+    const baseFov = settings.get('fov');
+    const fov = (baseFov + this.fovKick) * (1 - this.zoom * 0.45);
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+
     // camera shake decay
     this.shake = Math.max(0, this.shake - dt * 2.2);
     const shakeX = (Math.random() - 0.5) * this.shake * 0.05;
@@ -205,10 +277,10 @@ export class FPSController {
 
     this.camera.position.set(
       pos.x + bobX + shakeX,
-      eyeY + bobY + breath + shakeY,
+      eyeY + bobY + breath + shakeY - this.landDip,
       pos.z,
     );
-    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, this.roll, 'YXZ'));
 
     bus.emit(Events.PLAYER_MOVED, {
       position: this.camera.position,

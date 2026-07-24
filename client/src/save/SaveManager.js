@@ -8,6 +8,7 @@
 import { bus, Events } from '../core/EventBus.js';
 import { api } from '../net/ApiClient.js';
 import { ROOMS } from '../config/constants.js';
+import { campaign } from '../config/campaign.js';
 
 const LOCAL_KEY = 'escape_room_saves';
 const AUTOSAVE_INTERVAL_S = 120;
@@ -42,7 +43,7 @@ export class SaveManager {
     const slots = Object.entries(local).map(([slot, data]) => ({
       slot: Number(slot),
       room_id: data.room_id,
-      room_name: ROOMS.find((r) => r.key === data.room_id)?.name,
+      room_name: campaign.get(data.room_id)?.name ?? ROOMS.find((r) => r.key === data.room_id)?.name,
       playtime_s: data.playtime_s,
       updated_at: data.updated_at,
       source: 'local',
@@ -57,7 +58,7 @@ export class SaveManager {
             if (existing) Object.assign(existing, cloud, { source: 'cloud' });
             else slots.push({
               ...cloud,
-              room_name: ROOMS.find((r) => r.key === cloud.room_id)?.name,
+              room_name: campaign.get(cloud.room_id)?.name ?? ROOMS.find((r) => r.key === cloud.room_id)?.name,
               source: 'cloud',
             });
           }
