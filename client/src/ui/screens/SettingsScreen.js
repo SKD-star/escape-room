@@ -7,10 +7,11 @@ import { html, screens } from '../ScreenManager.js';
 
 const TABS = {
   audio: [
-    { key: 'masterVolume', name: 'Master Volume', desc: 'Overall loudness', type: 'range' },
-    { key: 'musicVolume', name: 'Music Volume', desc: 'Ambient soundtrack', type: 'range' },
-    { key: 'sfxVolume', name: 'Effects Volume', desc: 'Footsteps, doors, puzzles', type: 'range' },
-    { key: 'voiceVolume', name: 'Voices Volume', desc: 'Spirits and narration', type: 'range' },
+    { key: 'audioMuted', name: 'Mute All Audio', desc: 'Silence everything instantly — persists on restart', type: 'toggle' },
+    { key: 'masterVolume', name: 'Master Volume', desc: 'Overall game audio loudness', type: 'range' },
+    { key: 'musicVolume', name: 'Background Music (BGM)', desc: 'Adjust background music volume level', type: 'range' },
+    { key: 'sfxVolume', name: 'Sound Effects (SFX)', desc: 'Footsteps, doors, levers & puzzles', type: 'range' },
+    { key: 'voiceVolume', name: 'Voices & Narration', desc: 'Spirits and story narration', type: 'range' },
   ],
   video: [
     { key: 'quality', name: 'Graphics Quality', desc: 'Shadows, effects, resolution', type: 'select', options: Object.keys(QUALITY_PRESETS) },
@@ -24,16 +25,16 @@ const TABS = {
     { key: 'invertY', name: 'Invert Y-Axis', desc: 'Flip vertical look', type: 'toggle' },
     { key: 'headBob', name: 'Head Bob', desc: 'Camera sway while walking', type: 'toggle' },
     { key: 'subtitles', name: 'Subtitles', desc: 'Show spoken lines as text', type: 'toggle' },
-    { key: 'hints', name: 'AI Hints', desc: 'Allow requesting hints', type: 'toggle' },
+    { key: 'hints', name: 'AI Hints', desc: 'Allow requesting hints from the spirits', type: 'toggle' },
     { key: 'sanityFx', name: 'Sanity Effects', desc: 'Fear-driven visual and audio distortion', type: 'toggle' },
     { key: 'hauntEnabled', name: 'The Presence', desc: 'The entity that stalks between puzzles', type: 'toggle' },
     { key: 'soundCaptions', name: 'Sound Captions', desc: 'Caption important world sounds (accessibility)', type: 'toggle' },
     { key: 'showCompass', name: 'Compass', desc: 'Direction tape at the top of the screen', type: 'toggle' },
     { key: 'showTimer', name: 'Speedrun Timer', desc: 'Run clock with per-room PB splits', type: 'toggle' },
-    { key: 'countdownTimer', name: 'Room Countdown', desc: 'Per-room time limit on Normal & Nightmare', type: 'toggle' },
     { key: 'gamepad', name: 'Controller Support', desc: 'Use a connected gamepad', type: 'toggle' },
   ],
 };
+
 
 const KEYBINDS = [
   ['W A S D', 'Move'], ['Mouse', 'Look'], ['RMB (hold)', 'Focus zoom'],

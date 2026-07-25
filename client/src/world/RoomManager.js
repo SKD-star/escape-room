@@ -44,7 +44,7 @@ const THEME_CLASSES = {
 
 export class RoomManager {
   /**
-   * @param {object} ctx { engine, physics, interactions, player }
+   * @param {object} ctx { engine, physics, interactions, player, inventory }
    */
   constructor(ctx) {
     this.ctx = ctx;
@@ -93,6 +93,10 @@ export class RoomManager {
       definition,
     });
     room.build();
+
+    // Inject inventory reference so door callbacks can validate key ownership.
+    // This must happen after build() since addExitDoor() is called inside buildRoom().
+    if (this.ctx.inventory) room.setInventoryRef(this.ctx.inventory);
 
     // Recreate the player character body (physics world was cleared).
     const rebuilt = this.ctx.physics.createCharacter(

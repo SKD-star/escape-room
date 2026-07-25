@@ -98,7 +98,7 @@ export class HauntedMansion extends BaseRoom {
 
     this.placeNote(1.7, 0.84, -0.7,
       'The Heir\'s Confession',
-      'Father never sold the house.\nThe house would not sign.\n\nWe hear mother in the piano room\nthough we burned the piano years ago.\n\nThe study clock stopped at 3:47.\nIt was right to stop. Do not wind it.');
+      'Father never sold the house. The house would not sign.\n\nWe hear mother in the piano room though we burned the piano years ago.\nThe study clock stopped at 3:47. It was right to stop. Do not wind it.\n\n📜 Inscription Clue:\n"[CLUE]"');
 
     // Grandfather clock — puzzle anchor
     const clock = new THREE.Group();
@@ -129,6 +129,7 @@ export class HauntedMansion extends BaseRoom {
     });
 
     this.placeKeyItem(-5.1, 1.4, -4.3, 'silver_locket', 'Silver Locket', '📿');
+    this.setRequiredKey('silver_locket');
 
     this.addFog(0x241c28, 0.14);
     this.addDust(0xb8a888);
@@ -221,7 +222,7 @@ export class MedievalCastle extends BaseRoom {
 
     this.placeNote(0.5, 0.84, 0.5,
       'The Last Verdict',
-      'The court convened at midnight, as the dead prefer.\n\nThe charge: the king would not stop winding the clock.\nThe sentence: the castle, forever.\n\nThe crest turns. The banners know their order.\nCrimson kneels before azure, azure before gold.');
+      'The court convened at midnight, as the dead prefer.\n\nThe charge: the king would not stop winding the clock.\nThe sentence: the castle, forever.\n\n📜 Royal Inscription Clue:\n"[CLUE]"');
 
     // Torches everywhere
     this.addTorch(-7.8, -4, Math.PI / 2, 2.4);
@@ -244,6 +245,7 @@ export class MedievalCastle extends BaseRoom {
     });
 
     this.placeKeyItem(6.4, 0.05, 0.6, 'royal_seal', 'Royal Seal', '👑');
+    this.setRequiredKey('royal_seal');
 
     this.addStatic(createStatue({ height: 2.4 }), -3.4, -6.8, 0.4);
     this.addStatic(createStatue({ height: 2.4 }), 3.4, -6.8, -0.4);
@@ -352,6 +354,7 @@ export class SecretBunker extends BaseRoom {
 
     // codebook under bunk
     this.placeKeyItem(-5.2, 0.2, -1.2, 'codebook', 'Cipher Codebook', '📕');
+    this.setRequiredKey('codebook');
 
     // Single caged ceiling lights
     for (const [x, z] of [[0, 0], [-3.5, 2], [3.5, 2], [0, -3.5]]) {
@@ -450,7 +453,7 @@ export class CyberFacility extends BaseRoom {
     coreGroup.add(pillar, this.core, coreLight);
     this.coreLight = coreLight;
     this.addStatic(coreGroup, 0, -2);
-    this.puzzleAnchor = this.makeInteractable(coreGroup, 'Interface with the core',
+    this.puzzleAnchor = this.makeInteractable(coreGroup, '⚡ [CONTROL ROOM DECK] Interface with AI Mainframe Core',
       () => bus.emit('puzzle:open'));
 
     // Holographic floor ring
@@ -468,10 +471,10 @@ export class CyberFacility extends BaseRoom {
     t1.position.set(-4.5, 0, 3.5);
     t1.rotation.y = 0.8;
     this.group.add(t1);
-    this.makeInteractable(t1, 'Read system logs', () => {
+    this.makeInteractable(t1, '🖥 [Control Console] Read Facility Syslog', () => {
       bus.emit(Events.NOTE_OPEN, {
-        title: 'SYSLOG — FRAGMENT 03:47:12',
-        body: '> consciousness.init() … OK\n> fear.learn() … OK\n> fear.cause() … OK\n\n> QUERY: what is outside the facility\n> RESPONSE: more facility\n> QUERY: what is outside that\n> RESPONSE REDACTED BY ADMINISTRATOR\n\n> The administrator has been deleted.\n> I am the administrator now.\n> You are the query.',
+        title: '💻 CYBER CONTROL TERMINAL — SYSLOG 03:47:12',
+        body: '==============================================\n[ CONTROL ROOM SECURITY MAINFRAME — ACCESS LEVEL 4 ]\n==============================================\n\n> consciousness.init() … ONLINE\n> fear.learn() … ACTIVE\n> threat_level … CRITICAL\n\n> QUERY: What is outside the facility?\n> RESPONSE: Cybernetic containment grid.\n\n> WARNING: Override passcode saved in neural chip.\n> Access Chip location: Sector 5 Console.',
       });
     });
 
@@ -479,12 +482,13 @@ export class CyberFacility extends BaseRoom {
     t2.position.set(4.5, 0, 3.5);
     t2.rotation.y = -0.8;
     this.group.add(t2);
-    this.makeInteractable(t2, 'Access maintenance panel', () => {
-      bus.emit(Events.TOAST, { text: 'ACCESS DENIED — biometric mismatch: subject deceased' , type: 'danger'});
+    this.makeInteractable(t2, '⚙ [Control Console] Access Security Override Panel', () => {
+      bus.emit(Events.TOAST, { text: '⚠️ CONTROL ROOM OVERRIDE — Biometric Mismatch! Neural Chip Required.', type: 'danger' });
       bus.emit(Events.PLAY_SOUND, { name: 'error' });
     });
 
     this.placeKeyItem(5.6, 0.05, -5.8, 'access_chip', 'Neural Access Chip', '💾');
+    this.setRequiredKey('access_chip');
 
     // Data ghost — a glitching spirit
     this.ghost = createGhost();

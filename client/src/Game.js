@@ -6,7 +6,7 @@
 import { bus, Events } from './core/EventBus.js';
 import { Engine } from './core/Engine.js';
 import { PerfGuard } from './core/PerfGuard.js';
-import { PhotoMode } from './core/PhotoMode.js';
+
 import { PhysicsWorld, initRapier } from './core/PhysicsWorld.js';
 import { FPSController } from './player/FPSController.js';
 import { Flashlight } from './player/Flashlight.js';
@@ -15,6 +15,7 @@ import { TouchControls } from './player/TouchControls.js';
 import { SanitySystem } from './player/SanitySystem.js';
 import { SpeedrunTimer } from './player/SpeedrunTimer.js';
 import { LevelTimer } from './player/LevelTimer.js';
+import { AttemptsTracker } from './player/AttemptsTracker.js';
 import { InteractionSystem } from './player/InteractionSystem.js';
 import { RoomManager } from './world/RoomManager.js';
 import { HauntSystem } from './world/HauntSystem.js';
@@ -93,20 +94,21 @@ export class Game {
     this.interactions = new InteractionSystem(this.engine, this.physics);
     this.flashlight = new Flashlight(this.engine, () => Boolean(this.interactions.inspecting));
     this.sanity = new SanitySystem(this.engine, this.flashlight);
+    this.inventory = new Inventory();
     this.rooms = new RoomManager({
       engine: this.engine,
       physics: this.physics,
       interactions: this.interactions,
       player: this.player,
+      inventory: this.inventory, // injected so door callbacks can validate key ownership
     });
     this.haunt = new HauntSystem(this.engine, this.player, this.flashlight, this.rooms);
     this.gamepad = new GamepadInput(this.player, this.interactions, this.flashlight);
     this.touch = new TouchControls(this.player, this.interactions, this.flashlight);
     this.timer = new SpeedrunTimer();
     this.levelTimer = new LevelTimer();
-    this.photoMode = new PhotoMode(this.engine, () => this.isPlaying);
+    this.attemptsTracker = new AttemptsTracker();
     this.puzzles = new PuzzleManager();
-    this.inventory = new Inventory();
 
     this.ui.loading.setProgress(0.85, 'Listening for whispers…');
     this.bindEvents();
@@ -125,10 +127,10 @@ export class Game {
     this.engine.addSystem({ update: (dt) => this.gamepad.update(dt) });
     this.engine.addSystem({ update: (dt) => this.touch.update(dt) });
     this.engine.addSystem({ update: (dt) => { if (this.isPlaying) this.timer.update(dt); } });
-    // The level countdown self-gates (enabled/frozen/running) so it keeps
-    // ticking while a puzzle modal is open — the deadline includes solving.
+    // LevelTimer kept for room-entry events / par tracking; countdown display removed from HUD.
     this.engine.addSystem({ update: (dt) => this.levelTimer.update(dt) });
     this.engine.addSystem({ update: (dt) => this.perfGuard.update(dt) });
+    this.engine.addSystem({ update: (dt) => { this.attemptsTracker.enabled = this.isPlaying; } });
     this.engine.addSystem({
       update: (dt) => {
         if (this.isPlaying) {
@@ -163,12 +165,14 @@ export class Game {
     this.sanity.enabled = active && settings.get('sanityFx');
     this.haunt.enabled = active && settings.get('hauntEnabled');
     this.levelTimer.enabled = active;
+    this.attemptsTracker.enabled = active && difficulty.key !== 'story';
     if (active) this.levelTimer.frozen = false;
     if (!active && this.flashlight.on) this.flashlight.toggle(false);
   }
 
   async newGame(modeKey = 'normal') {
     this.audio.start();
+    this.audio.startBGM();
     difficulty.set(modeKey);
     await campaign.load(); // pull the live room order/roster from the admin
     this.stats = this.freshStats();
@@ -207,6 +211,7 @@ export class Game {
     this.player.enable();
     this.setSystemsActive(true);
     this.levelTimer.begin(this.rooms.currentKey);
+    this.attemptsTracker.begin(this.rooms.currentKey);
     this.track('room_entered', { room_id: key });
 
     // First-room onboarding: light raised for you, and a hint about it
@@ -342,6 +347,56 @@ export class Game {
     this._failing = false;
   }
 
+  /**
+   * Full game restart — called when all 3 attempts are exhausted.
+   * Resets all state (inventory, puzzles, stats, flags) and starts over from Room 1.
+   * Per design: "When all three attempts are exhausted — show Game Over, reset all progress."
+   */
+  async restartRoom() {
+    if (this._restarting) return;
+    this._restarting = true;
+
+    // Full run reset
+    this.stats = this.freshStats();
+    this.flags = {};
+    this.inventory.restore([]);
+    this.sanity.reset();
+    this.ui.journal?.restore([]);
+    this.timer.start();
+
+    const firstKey = campaign.first() ?? ROOMS[0].key;
+
+    this.player.disable();
+    this.setSystemsActive(false);
+    bus.emit(Events.PLAY_SOUND, { name: 'error' });
+    bus.emit(Events.TOAST, {
+      text: 'Starting over from the beginning…',
+      type: 'danger', duration: 3000,
+    });
+
+    try {
+      await screens.fadeTransition(async () => {
+        await this.rooms.load(firstKey);
+        bus.emit(Events.AMBIENCE_CHANGE, this.rooms.current.definition.theme);
+      });
+    } catch (err) {
+      console.error('[Game] full restart failed', err);
+      await this.rooms.load(firstKey);
+    } finally {
+      screens.hideAll();
+      screens.show('hud');
+    }
+
+    this.state = 'playing';
+    this.player.enable();
+    this.setSystemsActive(true);
+    this.levelTimer.begin(this.rooms.currentKey);
+    this.attemptsTracker.begin(this.rooms.currentKey);
+    this.track('run_restart', { from_room: this.rooms.currentKey });
+    this._restarting = false;
+  }
+
+
   finishGame() {
     this.state = 'ending';
     this.player.disable();
@@ -453,7 +508,8 @@ export class Game {
     bus.on(Events.PUZZLE_SOLVED, ({ timeS, hintsUsed }) => {
       this.stats.puzzles_solved += 1;
       this.stats.hints_used += hintsUsed;
-      this.rooms.current?.unlockExit();
+      // Check if player has the required key before unlocking exit
+      this.rooms.current?.unlockExit(this.inventory);
       if (timeS < 180) this.unlock('speed_demon');
       if (this.stats.puzzles_solved >= 50) this.unlock('puzzle_master');
       this.track('puzzle_solved', { time_s: timeS, hints: hintsUsed });
@@ -467,6 +523,7 @@ export class Game {
     bus.on(Events.ITEM_ADDED, () => {
       this.stats.items_collected += 1;
       if (this.stats.items_collected >= 25) this.unlock('collector');
+      this.rooms.current?.checkKeyCollected(this.inventory);
       this.track('item_collected');
     });
 
@@ -511,6 +568,16 @@ export class Game {
     });
 
     bus.on(Events.PUZZLE_FAILED, () => this.track('puzzle_failed'));
+
+    // Attempts exhausted → allow room restart
+    bus.on('attempts:exhausted', () => {
+      this.pause(true);
+      bus.emit(Events.TOAST, {
+        text: 'Press R to restart the room with a new puzzle.',
+        type: 'danger',
+        duration: 8000,
+      });
+    });
   }
 
   bindKeys() {
@@ -533,6 +600,12 @@ export class Game {
           screens.show('journal');
         } else if (screens.current === 'journal') {
           this.ui.journal.close();
+        }
+      }
+      if (e.code === 'KeyR') {
+        if (this.attemptsTracker.exhausted || screens.current === 'room-locked') {
+          screens.hide('room-locked');
+          this.restartRoom();
         }
       }
       if (e.code === 'F5') {

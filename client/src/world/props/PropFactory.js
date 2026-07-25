@@ -333,6 +333,31 @@ export function createNote() {
   return note;
 }
 
+/** Ancient rolled parchment scroll prop with red ribbon and soft golden glow. */
+export function createScroll() {
+  const group = new THREE.Group();
+  const parchmentMat = plainMaterial(0xded5c0, { roughness: 0.9, metalness: 0.1 });
+  const ribbonMat = plainMaterial(0x8a2222, { roughness: 0.6 });
+
+  const roll = mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.28, 12), parchmentMat);
+  roll.rotation.z = Math.PI / 2;
+
+  const ribbon = mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.04, 12), ribbonMat);
+  ribbon.rotation.z = Math.PI / 2;
+
+  const innerRoll = mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.282, 12),
+    plainMaterial(0x6b5c47, { roughness: 0.95 }));
+  innerRoll.rotation.z = Math.PI / 2;
+
+  group.add(roll, ribbon, innerRoll);
+
+  const glow = new THREE.PointLight(0xd8b040, 0.9, 2.0, 2);
+  glow.position.y = 0.15;
+  group.add(glow);
+
+  return group;
+}
+
 /** Old-fashioned key. */
 export function createKey() {
   const group = new THREE.Group();
@@ -367,34 +392,110 @@ export function createBattery() {
 /** Ghost — translucent hooded figure that drifts; userData.animate(t). */
 export function createGhost() {
   const group = new THREE.Group();
+
+  // Ethereal translucent material for main body
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x9fc4d4,
+    color: 0x64b5f6,
+    emissive: 0x1e88e5,
     transparent: true,
-    opacity: 0.16,
-    emissive: 0x76a8bc,
-    emissiveIntensity: 0.7,
+    opacity: 0.45,
+    emissiveIntensity: 0.9,
     depthWrite: false,
-    roughness: 1,
+    roughness: 0.3,
+    side: THREE.DoubleSide,
   });
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.5, 12), mat);
-  body.position.y = 0.75;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mat);
-  head.position.y = 1.55;
-  group.add(body, head);
-  const light = new THREE.PointLight(0x86b8cc, 1.2, 5, 2);
-  light.position.y = 1.3;
+
+  // Inner core glow
+  const innerMat = new THREE.MeshBasicMaterial({
+    color: 0x90caf9,
+    transparent: true,
+    opacity: 0.6,
+  });
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.6, 24), mat);
+  body.position.y = 0.8;
+  const innerCore = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.3, 16), innerMat);
+  innerCore.position.y = 0.8;
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 18), mat);
+  head.position.y = 1.62;
+
+  group.add(body, innerCore, head);
+
+  // Ethereal glowing spectral eyes
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), eyeMat);
+  eyeL.position.set(-0.065, 1.65, 0.16);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), eyeMat);
+  eyeR.position.set(0.065, 1.65, 0.16);
+  group.add(eyeL, eyeR);
+
+  // Floating spectral book floating before her
+  const bookCoverMat = new THREE.MeshStandardMaterial({ color: 0x37474f, roughness: 0.5 });
+  const bookPagesMat = new THREE.MeshBasicMaterial({ color: 0xffecb3 });
+  const book = new THREE.Group();
+  const cover = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.35), bookCoverMat);
+  const pages = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.035, 0.33), bookPagesMat);
+  book.add(cover, pages);
+  book.position.set(0, 1.05, 0.42);
+  book.rotation.x = 0.35;
+  group.add(book);
+
+  // Floating particle wisps orbiting the ghost librarian
+  const wispGeo = new THREE.SphereGeometry(0.03, 8, 8);
+  const wispMat = new THREE.MeshBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.8 });
+  const wisps = [];
+  for (let i = 0; i < 3; i++) {
+    const wisp = new THREE.Mesh(wispGeo, wispMat);
+    group.add(wisp);
+    wisps.push(wisp);
+  }
+
+  // Double floating spectral aura rings at the base
+  const auraGeo1 = new THREE.TorusGeometry(0.48, 0.02, 12, 32);
+  const auraMat1 = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.5 });
+  const aura1 = new THREE.Mesh(auraGeo1, auraMat1);
+  aura1.rotation.x = Math.PI / 2;
+  aura1.position.y = 0.2;
+
+  const auraGeo2 = new THREE.TorusGeometry(0.35, 0.015, 12, 32);
+  const auraMat2 = new THREE.MeshBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.35 });
+  const aura2 = new THREE.Mesh(auraGeo2, auraMat2);
+  aura2.rotation.x = Math.PI / 2;
+  aura2.position.y = 0.32;
+  group.add(aura1, aura2);
+
+  const light = new THREE.PointLight(0x00e5ff, 2.2, 7, 2);
+  light.position.y = 1.4;
   group.add(light);
-  // generous invisible hit capsule — ghosts are thin, make them easy to address
+
+  // Generous hit proxy
   const hit = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.5, 1.2, 4, 8),
-    new THREE.MeshBasicMaterial({ visible: false }),
+    new THREE.CapsuleGeometry(0.75, 1.5, 4, 8),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
   );
   hit.position.y = 0.95;
   group.add(hit);
+
   group.userData.animate = (t) => {
-    group.position.y = Math.sin(t * 0.8) * 0.15;
-    mat.opacity = 0.1 + Math.abs(Math.sin(t * 0.5)) * 0.12;
+    group.position.y = Math.sin(t * 0.9) * 0.18;
+    group.rotation.y = Math.sin(t * 0.3) * 0.12;
+    mat.opacity = 0.35 + Math.abs(Math.sin(t * 0.6)) * 0.2;
+    aura1.rotation.z = t * 0.8;
+    aura2.rotation.z = -t * 1.2;
+    book.position.y = 1.05 + Math.sin(t * 1.8) * 0.04;
+    book.rotation.y = Math.sin(t * 0.9) * 0.1;
+
+    wisps.forEach((wisp, i) => {
+      const angle = t * 1.5 + (i * Math.PI * 2) / 3;
+      wisp.position.x = Math.cos(angle) * 0.55;
+      wisp.position.z = Math.sin(angle) * 0.55;
+      wisp.position.y = 1.3 + Math.sin(t * 2 + i) * 0.2;
+    });
+
+    light.intensity = 1.8 + Math.sin(t * 2.1) * 0.6;
   };
+
   return group;
 }
 

@@ -7,6 +7,7 @@ import { bus, Events } from '../../core/EventBus.js';
 import { settings } from '../../config/settings.js';
 import { html, screens } from '../ScreenManager.js';
 import { escapeHtml } from './MenuScreens.js';
+import { ICONS } from '../icons.js';
 
 export class HUD {
   constructor() {
@@ -15,18 +16,27 @@ export class HUD {
         <div class="hud-crosshair"></div>
         <div class="hud-compass"><div class="tape"></div><div class="tick"></div></div>
         <div class="hud-timer"><span class="clock">0:00.0</span><span class="split"></span></div>
-        <div class="hud-countdown" title="Room time limit"><span class="cd-icon">⏳</span><span class="cd-clock">0:00</span></div>
+        <div class="hud-attempts" title="Attempts remaining this run">
+          <span class="attempts-label">ATTEMPTS</span>
+          <span class="attempts-pips">
+            <span class="attempt-pip active" data-pip="1" aria-label="Attempt 1">☽</span>
+            <span class="attempt-pip active" data-pip="2" aria-label="Attempt 2">☽</span>
+            <span class="attempt-pip active" data-pip="3" aria-label="Attempt 3">☽</span>
+          </span>
+        </div>
         <div class="hud-interact-label"><span class="key">E</span><span class="text">Interact</span></div>
-        <div class="hud-objective glass">
-          <div class="label">Objective</div>
-          <p class="objective-text">Find a way out.</p>
+        <div class="hud-info-stack">
+          <div class="hud-objective glass">
+            <div class="label">Objective</div>
+            <p class="objective-text">Find a way out.</p>
+          </div>
+          <div class="hud-briefing glass">
+            <div class="label">Briefing</div>
+            <p class="brief-text"></p>
+            <p class="brief-tip"></p>
+          </div>
         </div>
         <div class="hud-room-title"><h2></h2><p></p></div>
-        <div class="hud-briefing glass">
-          <div class="label">Briefing</div>
-          <p class="brief-text"></p>
-          <p class="brief-tip"></p>
-        </div>
         <div class="hud-toast-stack"></div>
         <div class="hud-captions"></div>
         <div class="hud-stamina"><div class="fill" style="width:100%"></div></div>
@@ -40,6 +50,7 @@ export class HUD {
         </div>
         <div class="hud-fps">-- fps</div>
       </div>`;
+
 
     this.crosshair = this.el.querySelector('.hud-crosshair');
     this.interactLabel = this.el.querySelector('.hud-interact-label');
@@ -62,10 +73,9 @@ export class HUD {
     this.timerEl = this.el.querySelector('.hud-timer');
     this.timerClock = this.el.querySelector('.hud-timer .clock');
     this.timerSplit = this.el.querySelector('.hud-timer .split');
-    this.countdownEl = this.el.querySelector('.hud-countdown');
-    this.countdownClock = this.el.querySelector('.hud-countdown .cd-clock');
+    this.attemptsEl = this.el.querySelector('.hud-attempts');
+    this.attemptPips = this.el.querySelectorAll('.attempt-pip');
     this.captions = this.el.querySelector('.hud-captions');
-    this.buildCompassTape();
 
     screens.register('hud', this.el, { persistent: true });
     this.bind();
@@ -121,37 +131,44 @@ export class HUD {
       gsap.fromTo(this.timerSplit, { opacity: 1 }, { opacity: 0, duration: 1.2, delay: 4 });
     });
 
-    // Per-room difficulty countdown (Normal / Nightmare)
-    bus.on('countdown:begin', ({ remaining, limit, harsh }) => {
-      this.countdownEl.classList.add('visible');
-      this.countdownEl.classList.toggle('harsh', !!harsh);
-      this.countdownEl.classList.remove('warn', 'urgent', 'over', 'timeout', 'banked');
-      this.renderCountdown(remaining, limit);
+    // Per-room difficulty countdown — events handled but display suppressed
+    // (countdown timer removed from HUD per design; LevelTimer still runs internally)
+    bus.on('countdown:begin', () => {});
+    bus.on('countdown:tick', () => {});
+    bus.on('countdown:expired', () => {});
+    bus.on('countdown:timeout', () => {});
+    bus.on('countdown:cleared', () => {});
+    bus.on('countdown:hidden', () => {});
+
+    // Attempts tracker — pip icon display (☽ = active, ☠ = lost)
+    const updatePips = (remaining) => {
+      this.attemptPips.forEach((pip, i) => {
+        const alive = i < remaining;
+        pip.textContent = alive ? '☽' : '☠';
+        pip.classList.toggle('active', alive);
+        pip.classList.toggle('lost', !alive);
+      });
+    };
+
+    bus.on('attempts:begin', ({ remaining }) => {
+      this.attemptsEl.classList.add('visible');
+      this.attemptsEl.classList.remove('last-attempt', 'exhausted');
+      updatePips(remaining);
     });
-
-    bus.on('countdown:tick', ({ remaining, limit }) => this.renderCountdown(remaining, limit));
-
-    bus.on('countdown:expired', () => {
-      this.countdownEl.classList.remove('warn', 'urgent');
-      this.countdownEl.classList.add('over');
+    bus.on('attempts:failed', ({ remaining }) => {
+      updatePips(remaining);
+      if (remaining === 1) this.attemptsEl.classList.add('last-attempt');
+      gsap.fromTo(this.attemptsEl, { scale: 1.25 }, { scale: 1, duration: 0.35, ease: 'elastic.out(1, 0.5)' });
     });
-
-    bus.on('countdown:timeout', () => {
-      this.countdownEl.classList.remove('warn', 'urgent', 'banked');
-      this.countdownEl.classList.add('visible', 'over', 'timeout');
-      this.countdownClock.textContent = 'TIME UP';
+    bus.on('attempts:exhausted', () => {
+      updatePips(0);
+      this.attemptsEl.classList.add('exhausted');
     });
-
-    bus.on('countdown:cleared', ({ remaining, expired }) => {
-      // Flash the outcome, then retire the pill until the next room.
-      this.countdownEl.classList.remove('warn', 'urgent', 'over');
-      this.countdownClock.textContent = expired ? 'CLEARED' : this.formatCountdown(remaining);
-      this.countdownEl.classList.toggle('banked', !expired);
-      setTimeout(() => this.countdownEl.classList.remove('visible', 'banked'), 1700);
+    bus.on('attempts:cleared', () => {
+      this.attemptsEl.classList.remove('visible', 'last-attempt', 'exhausted');
     });
-
-    bus.on('countdown:hidden', () => {
-      this.countdownEl.classList.remove('visible', 'warn', 'urgent', 'over', 'timeout', 'banked', 'harsh');
+    bus.on('attempts:hidden', () => {
+      this.attemptsEl.classList.remove('visible', 'last-attempt', 'exhausted');
     });
 
     // Accessibility: caption world sounds
@@ -170,8 +187,7 @@ export class HUD {
     });
 
     bus.on(Events.OBJECTIVE_CHANGED, (text) => {
-      gsap.fromTo(this.objectiveText, { opacity: 0 }, { opacity: 1, duration: 0.6 });
-      this.objectiveText.textContent = text;
+      this.showObjective(text);
     });
 
     bus.on(Events.ROOM_ENTERED, ({ name, chapter, brief, tip }) => {
@@ -210,6 +226,18 @@ export class HUD {
     });
   }
 
+  showObjective(text) {
+    if (!this.objectiveEl) this.objectiveEl = this.el.querySelector('.hud-objective');
+    this.objectiveText.textContent = text;
+    gsap.killTweensOf(this.objectiveEl);
+    this.objectiveEl.classList.add('visible');
+    gsap.timeline()
+      .fromTo(this.objectiveEl, { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out' })
+      .to(this.objectiveEl, { opacity: 0, y: -10, duration: 0.8, ease: 'power2.in',
+        onComplete: () => this.objectiveEl.classList.remove('visible') }, '+=4.5');
+  }
+
   formatCountdown(seconds) {
     const s = Math.max(0, Math.ceil(seconds));
     const m = Math.floor(s / 60);
@@ -246,7 +274,7 @@ export class HUD {
       .to(this.roomTitle, { opacity: 0, duration: 1.4, ease: 'power2.in' }, '+=2.6');
   }
 
-  /** Per-level "how to play this room" card — slides in after the title, holds, fades. */
+  /** Per-level "how to play this room" card — slides in after the title, holds for 4.5s, fades. */
   showBriefing(brief, tip) {
     if (!brief && !tip) { this.briefing.classList.remove('visible'); return; }
     this.briefText.textContent = brief ?? '';
@@ -255,10 +283,10 @@ export class HUD {
     gsap.killTweensOf(this.briefing);
     this.briefing.classList.add('visible');
     gsap.timeline()
-      .fromTo(this.briefing, { opacity: 0, x: -20 },
-        { opacity: 1, x: 0, duration: 0.7, ease: 'expo.out', delay: 1.4 })
-      .to(this.briefing, { opacity: 0, x: -12, duration: 1.0, ease: 'power2.in',
-        onComplete: () => this.briefing.classList.remove('visible') }, '+=9');
+      .fromTo(this.briefing, { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', delay: 0.8 })
+      .to(this.briefing, { opacity: 0, y: -10, duration: 0.8, ease: 'power2.in',
+        onComplete: () => this.briefing.classList.remove('visible') }, '+=4.5');
   }
 
   toast(text, type, duration) {

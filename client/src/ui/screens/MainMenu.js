@@ -6,6 +6,7 @@ import { bus, Events } from '../../core/EventBus.js';
 import { api } from '../../net/ApiClient.js';
 import { html, screens } from '../ScreenManager.js';
 import { GAME_VERSION } from '../../config/constants.js';
+import { ICONS } from '../icons.js';
 
 export class MainMenu {
   /**
@@ -27,13 +28,13 @@ export class MainMenu {
               <button class="btn btn-menu" data-action="load">Load Game</button>
             </div>
             <div class="menu-secondary">
-              <button class="btn btn-tile" data-action="leaderboard">🏆<span>Leaderboard</span></button>
-              <button class="btn btn-tile" data-action="achievements">🎖<span>Achievements</span></button>
-              <button class="btn btn-tile" data-action="stats">📊<span>Statistics</span></button>
-              <button class="btn btn-tile" data-action="manual">📖<span>Manual</span></button>
-              <button class="btn btn-tile" data-action="settings">⚙<span>Settings</span></button>
-              <button class="btn btn-tile" data-action="credits">✒<span>Credits</span></button>
-              <button class="btn btn-tile" data-action="account">👤<span class="account-label">Sign In</span></button>
+              <button class="btn btn-tile" data-action="leaderboard">${ICONS.trophy}<span>Leaderboard</span></button>
+              <button class="btn btn-tile" data-action="achievements">${ICONS.medal}<span>Achievements</span></button>
+              <button class="btn btn-tile" data-action="stats">${ICONS.stats}<span>Statistics</span></button>
+              <button class="btn btn-tile" data-action="manual">${ICONS.book}<span>Manual</span></button>
+              <button class="btn btn-tile" data-action="settings">${ICONS.settings}<span>Settings</span></button>
+              <button class="btn btn-tile" data-action="credits">${ICONS.credits}<span>Credits</span></button>
+              <button class="btn btn-tile" data-action="account">${ICONS.account}<span class="account-label">Sign In</span></button>
             </div>
           </nav>
           <footer class="menu-footer">

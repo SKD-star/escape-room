@@ -235,6 +235,7 @@ export const DEFAULT_SETTINGS = {
   musicVolume: 0.6,
   sfxVolume: 0.9,
   voiceVolume: 0.8,
+  audioMuted: false,     // global mute toggle
   // video
   quality: 'high',
   fov: 75,
@@ -253,6 +254,6 @@ export const DEFAULT_SETTINGS = {
   soundCaptions: false,  // accessibility: caption world sounds
   showCompass: true,     // HUD compass tape
   showTimer: false,      // speedrun timer + splits
-  countdownTimer: true,  // per-room difficulty countdown (Normal/Nightmare)
+  countdownTimer: false, // per-room difficulty countdown (disabled — using attempts system)
   gamepad: true,         // poll connected gamepads
 };

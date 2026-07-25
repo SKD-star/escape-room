@@ -18,19 +18,41 @@ const LOCAL_RIDDLES = [
 
 const SYMBOLS = ['moon', 'eye', 'serpent', 'key', 'skull', 'flame', 'hourglass', 'raven'];
 
+const DIGIT_RIDDLES = [
+  'The Unbroken Void',
+  'The Solitary Lectern',
+  'The Twin Pillars',
+  'The Trio of Torches',
+  'The Four Vault Corners',
+  'The Five-Pointed Star',
+  'The Six Hexagon Seals',
+  'The Seven Heavenly Rays',
+  'The Infinite Hourglass',
+  'The Nine Sacred Runes',
+];
+
 function localPuzzle(theme, difficulty) {
+  if (theme === 'library' || theme === 'haunted_library') {
+    return {
+      type: 'keypad',
+      title: 'The Librarian\'s Mechanism',
+      narrative: 'A brass keypad waits. The inscription on the third bookshelf guides your deduction.',
+      code: '1462',
+      clue: 'Observe the room\'s physical features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door',
+      difficulty,
+      provider: 'local',
+    };
+  }
+
   const kinds = ['keypad', 'riddle', 'sequence'];
   const kind = kinds[Math.floor(Math.random() * kinds.length)];
   if (kind === 'keypad') {
-    const digits = 3 + Math.floor(difficulty * 3);
-    let code = '';
-    for (let i = 0; i < digits; i++) code += Math.floor(Math.random() * 10);
     return {
       type: 'keypad',
       title: 'The Sealed Mechanism',
-      narrative: 'A cold keypad waits. Someone scratched tally marks beside it — then stopped mid-stroke.',
-      code,
-      clue: `${digits} digits. The room shows them to those who look at what burns.`,
+      narrative: 'A cold keypad waits. Count the room\'s physical relics in sequence to solve.',
+      code: '1462',
+      clue: 'Observe the room\'s physical features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door',
       difficulty,
       provider: 'local',
     };
@@ -40,21 +62,25 @@ function localPuzzle(theme, difficulty) {
     return {
       type: 'riddle',
       title: 'A Voice in the Dark',
-      narrative: 'Words scrape themselves into the surface as you watch…',
+      narrative: 'Words scrape themselves into the stone as you watch…',
       riddle: r.riddle,
       answer: r.answer,
+      clue: `An ancient scroll poses a riddle: "${r.riddle}" Solve the riddle to unlock the mechanism.`,
       difficulty,
       provider: 'local',
     };
   }
-  const length = Math.min(SYMBOLS.length, 4 + Math.floor(difficulty * 3));
+  const length = Math.min(SYMBOLS.length, 4);
   const sequence = [...SYMBOLS].sort(() => Math.random() - 0.5).slice(0, length);
+  const formattedNames = sequence.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+  const poem = `1. First ${formattedNames[0]} ascends,\n2. Then ${formattedNames[1]} awakens,\n3. Followed by ${formattedNames[2]},\n4. And ending with ${formattedNames[3] || 'the Altar'}.`;
+
   return {
     type: 'sequence',
     title: 'The Order of Things',
-    narrative: 'Old symbols shimmer faintly, remembering an order they once held.',
+    narrative: 'Old symbols shimmer faintly, remembering the sacred order etched in stone.',
     sequence,
-    clue: `The ${sequence[0]} leads. ${length} marks in total.`,
+    clue: `The ritual poem reveals the sequence order:\n${poem}`,
     difficulty,
     provider: 'local',
   };

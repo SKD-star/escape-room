@@ -11,7 +11,7 @@ import { Engine } from '../core/Engine.js';
 import { bus, Events } from '../core/EventBus.js';
 import { createMaterial } from './materials/MaterialLibrary.js';
 import {
-  createBattery, createCandle, createDoor, createNote, createKey, createTorch,
+  createBattery, createCandle, createDoor, createNote, createScroll, createKey, createTorch,
 } from './props/PropFactory.js';
 import { DustMotes, GroundFog } from './particles/ParticleSystems.js';
 
@@ -31,10 +31,19 @@ export class BaseRoom {
     this.flickerLights = []; // candle/torch groups
     this.exitDoor = null;
     this.exitUnlocked = false;
+    /** Item ID required to unlock this room's exit (from inventory) */
+    this.requiredKeyItem = null;
 
     /** Room dimensions — subclasses may override before build(). */
     this.size = { width: 12, depth: 12, height: 4 };
     this.spawn = new THREE.Vector3(0, 1.2, this.size.depth / 2 - 2);
+
+    this.puzzleClue = null;
+    bus.on('puzzle:clue:ready', ({ roomKey, clue }) => {
+      if (this.definition.key === roomKey) {
+        this.puzzleClue = clue;
+      }
+    });
   }
 
   // -- lifecycle ----------------------------------------------------------
@@ -267,7 +276,7 @@ export class BaseRoom {
   // -- exit door ----------------------------------------------------------
 
   /**
-   * Standard exit door on the north wall. Locked until unlockExit().
+   * Standard exit door on the north wall. Locked until puzzle solved AND required key collected.
    */
   addExitDoor({ x = 0, z = null, rotY = 0, metal = false } = {}) {
     const door = createDoor({ metal });
@@ -276,36 +285,113 @@ export class BaseRoom {
     door.rotation.y = rotY;
     this.group.add(door);
     this.exitDoor = door;
+    this.puzzleSolved = false;
+    this.exitUnlocked = false;
+
     // collider blocks passage until opened
     this.exitCollider = this.physics.addStaticBox(
       { x, y: 1.2, z: dz }, { x: 0.65, y: 1.2, z: 0.12 }, rotY,
     );
 
     door.userData.interactable = {
-      label: 'Locked — solve the room',
-      onInteract: () => {
-        if (this.exitUnlocked) this.openExit();
-        else {
+      label: 'Locked — solve the room puzzle',
+      onInteract: (_obj, _interactionSystem) => {
+        // NOTE: inventory is accessed via this._inventoryRef, set by RoomManager
+        // after the room is constructed. This is the correct pattern — the
+        // InteractionSystem only provides (object, interactionSystem) to callbacks;
+        // inventory is a game-level concern injected separately.
+        const inventory = this._inventoryRef;
+        if (!this.puzzleSolved) {
           bus.emit(Events.PLAY_SOUND, { name: 'locked' });
-          bus.emit(Events.TOAST, { text: 'The door is sealed. The room is not done with you.', type: 'danger' });
+          bus.emit(Events.TOAST, { text: 'The door is sealed. Solve the puzzle first.', type: 'danger' });
+          return;
         }
+        if (this.requiredKeyItem && (!inventory || !inventory.has(this.requiredKeyItem))) {
+          bus.emit(Events.PLAY_SOUND, { name: 'locked' });
+          const keyName = this.requiredKeyItem.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+          bus.emit(Events.TOAST, {
+            text: `Puzzle solved — but the door needs the ${keyName}. Keep searching.`,
+            type: 'danger',
+            duration: 4500,
+          });
+          return;
+        }
+        this.openExit();
       },
     };
     this.interactions.register(door);
     return door;
   }
 
-  unlockExit() {
-    this.exitUnlocked = true;
-    if (this.exitDoor) {
-      this.exitDoor.userData.interactable.label = 'Open the way forward';
+  /** Whether the player's inventory contains the room's required key item. */
+  hasRequiredKey(inventory) {
+    if (!this.requiredKeyItem) return true;
+    const inv = inventory ?? this._inventoryRef ?? this.engine?.game?.inventory;
+    return Boolean(inv && inv.has(this.requiredKeyItem));
+  }
+
+  /** Set the item ID required to unlock this room's exit. */
+  setRequiredKey(itemId) {
+    this.requiredKeyItem = itemId;
+  }
+
+  /**
+   * Called by RoomManager after loading the room to inject the inventory
+   * reference. This allows the door callback to check the player's keys
+   * without needing to pass inventory through the InteractionSystem chain.
+   */
+  setInventoryRef(inventory) {
+    this._inventoryRef = inventory;
+  }
+
+  updateExitDoorStatus(inventory) {
+    if (!this.exitDoor) return;
+    const inv = inventory ?? this._inventoryRef ?? this.engine?.game?.inventory;
+    if (!this.puzzleSolved) {
+      this.exitDoor.userData.interactable.label = 'Locked — solve the room puzzle';
+    } else if (this.requiredKeyItem && (!inv || !inv.has(this.requiredKeyItem))) {
+      const keyName = this.requiredKeyItem.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      this.exitDoor.userData.interactable.label = `Locked — find the ${keyName}`;
+    } else {
+      this.exitDoor.userData.interactable.label = '[E] Open Exit Door';
     }
-    // marker handoff: puzzle done → guide to the exit
+  }
+
+  unlockExit(inventory) {
+    this.puzzleSolved = true;
+    const inv = inventory ?? this._inventoryRef ?? this.engine?.game?.inventory;
+    this.updateExitDoorStatus(inv);
+
+    if (this.requiredKeyItem && (!inv || !inv.has(this.requiredKeyItem))) {
+      const keyName = this.requiredKeyItem.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      bus.emit(Events.TOAST, {
+        text: `Puzzle solved! Now find the ${keyName} hidden in this room to unlock the door.`,
+        type: 'info',
+        duration: 5500,
+      });
+      bus.emit(Events.OBJECTIVE_CHANGED, `Find the ${keyName} and use it on the exit door.`);
+      return;
+    }
+
+    this.exitUnlocked = true;
     if (this.puzzleMarker) this.puzzleMarker.visible = false;
     if (this.exitMarker) this.exitMarker.visible = true;
     bus.emit(Events.PLAY_SOUND, { name: 'unlock' });
-    bus.emit(Events.TOAST, { text: 'Something heavy releases inside the exit door.' });
-    bus.emit(Events.OBJECTIVE_CHANGED, 'Escape through the unsealed door — follow the green light.');
+    bus.emit(Events.TOAST, { text: 'The exit lock releases — the door is now unsealed.' });
+    bus.emit(Events.OBJECTIVE_CHANGED, 'Escape through the open door — follow the green light.');
+  }
+
+  checkKeyCollected(inventory) {
+    const inv = inventory ?? this._inventoryRef ?? this.engine?.game?.inventory;
+    this.updateExitDoorStatus(inv);
+    if (this.puzzleSolved && this.hasRequiredKey(inv) && !this.exitUnlocked) {
+      this.exitUnlocked = true;
+      if (this.puzzleMarker) this.puzzleMarker.visible = false;
+      if (this.exitMarker) this.exitMarker.visible = true;
+      bus.emit(Events.PLAY_SOUND, { name: 'unlock' });
+      bus.emit(Events.TOAST, { text: 'Key secured, puzzle solved — the exit door is now open!' });
+      bus.emit(Events.OBJECTIVE_CHANGED, 'Escape through the open door — follow the green light.');
+    }
   }
 
   openExit() {
@@ -334,14 +420,77 @@ export class BaseRoom {
     const note = createNote();
     note.position.set(x, y, z);
     note.rotation.z = rotY;
-    this.addHitProxy(note, 0.3, 0);
+    this.addHitProxy(note, 0.5, 0);
+
+    const noteGlow = new THREE.PointLight(0xc9a227, 0.4, 1.5, 2);
+    noteGlow.position.set(x, y + 0.12, z);
+    this.group.add(noteGlow);
+
     this.group.add(note);
     note.userData.interactable = {
       label: 'Read note',
-      onInteract: () => bus.emit(Events.NOTE_OPEN, { title, body }),
+      onInteract: () => {
+        const clueText = this.puzzleClue ?? 'Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door';
+        let finalBody = body;
+        if (finalBody.includes('[CLUE]')) {
+          finalBody = finalBody.replace('[CLUE]', clueText);
+        } else {
+          finalBody = `${finalBody}\n\n📜 Inscription Clue:\n"${clueText}"`;
+        }
+        bus.emit(Events.NOTE_OPEN, { title, body: finalBody });
+        bus.emit(Events.TOAST, { text: '📜 Note logged to Journal (Press J to view)', type: 'info', duration: 4000 });
+      },
     };
     this.interactions.register(note);
     return note;
+  }
+
+  /** Place an ancient 3D rolled parchment scroll prop on a surface or shelf. */
+  placeScroll(x, y, z, title, body, rotY = 0) {
+    const scroll = createScroll();
+    scroll.position.set(x, y, z);
+    scroll.rotation.y = rotY;
+
+    // Generous hit proxy so interacting is smooth and effortless
+    this.addHitProxy(scroll, 0.85, 0.1);
+
+    // Bright golden beacon light
+    const glow = new THREE.PointLight(0xffd700, 2.5, 4.0, 2);
+    glow.position.set(0, 0.2, 0);
+    scroll.add(glow);
+
+    // Floating glowing gold diamond marker geometry above the scroll
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+    const markerMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), markerMat);
+    markerMesh.position.set(0, 0.45, 0);
+    scroll.add(markerMesh);
+
+    // Animate marker rotation
+    if (!this.updatables) this.updatables = [];
+    this.updatables.push({
+      update: (dt, t) => {
+        markerMesh.rotation.y = t * 2;
+        markerMesh.position.y = 0.45 + Math.sin(t * 3) * 0.05;
+      },
+    });
+
+    this.group.add(scroll);
+    scroll.userData.interactable = {
+      label: `Read ${title}`,
+      onInteract: () => {
+        const clueText = this.puzzleClue ?? 'Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door';
+        let finalBody = body;
+        if (finalBody.includes('[CLUE]')) {
+          finalBody = finalBody.replace('[CLUE]', clueText);
+        } else {
+          finalBody = `${finalBody}\n\n📜 Inscription Clue:\n"${clueText}"`;
+        }
+        bus.emit(Events.NOTE_OPEN, { title, body: finalBody });
+        bus.emit(Events.TOAST, { text: '📜 Scroll logged to Journal (Press J to view)', type: 'info', duration: 4000 });
+      },
+    };
+    this.interactions.register(scroll);
+    return scroll;
   }
 
   /**
@@ -374,10 +523,10 @@ export class BaseRoom {
   }
 
   /** Invisible sphere that makes small pickups easy to aim at. */
-  addHitProxy(object, radius = 0.35, y = 0.1) {
+  addHitProxy(object, radius = 0.55, y = 0.1) {
     const proxy = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 8, 8),
-      new THREE.MeshBasicMaterial({ visible: false }),
+      new THREE.SphereGeometry(radius, 12, 12),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
     );
     proxy.position.y = y;
     object.add(proxy);
@@ -401,6 +550,7 @@ export class BaseRoom {
         this.group.remove(obj);
         this.interactions.unregister(obj);
         bus.emit(Events.ITEM_ADDED, { id: itemId, name: itemName, icon });
+        this.checkKeyCollected();
       },
     };
     this.interactions.register(key);

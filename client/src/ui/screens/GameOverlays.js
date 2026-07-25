@@ -285,3 +285,70 @@ export class EndingScreen {
     screens.show('ending');
   }
 }
+
+// ---------------------------------------------------------------------------
+// Game Over — 3 Attempts Exhausted
+// ---------------------------------------------------------------------------
+
+export class RoomLockedModal {
+  constructor(onRestart, onQuit) {
+    this.onRestart = onRestart;
+    this.onQuit = onQuit;
+    this.el = html`
+      <div id="room-locked-screen" class="backdrop gameover-backdrop">
+        <div class="gameover-panel glass">
+          <div class="gameover-glitch-title">
+            <span aria-hidden="true">GAME OVER</span>
+            <span class="gameover-main-title">GAME OVER</span>
+          </div>
+          <div class="gameover-skulls" aria-label="All 3 attempts exhausted">
+            <span class="gameover-skull lost" aria-hidden="true">☠</span>
+            <span class="gameover-skull lost" aria-hidden="true">☠</span>
+            <span class="gameover-skull lost" aria-hidden="true">☠</span>
+          </div>
+          <p class="gameover-body">
+            All three attempts have been consumed.<br/>
+            The escape room remembers everything.<br/>
+            You must start again from the very beginning.
+          </p>
+          <div class="gameover-actions">
+            <button class="btn btn-primary gameover-restart" data-action="restart">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Start Over
+            </button>
+            <button class="btn gameover-quit" data-action="quit">
+              Quit to Menu
+            </button>
+          </div>
+          <p class="gameover-hint">All progress will be reset.</p>
+        </div>
+      </div>`;
+
+    this.el.querySelector('[data-action="restart"]').addEventListener('click', () => {
+      screens.hide('room-locked');
+      this.onRestart?.();
+    });
+    this.el.querySelector('[data-action="quit"]').addEventListener('click', () => {
+      screens.hide('room-locked');
+      this.onQuit?.();
+    });
+
+    screens.register('room-locked', this.el);
+
+    bus.on('attempts:exhausted', () => {
+      screens.show('room-locked');
+      bus.emit(Events.PLAY_SOUND, { name: 'error' });
+      bus.emit(Events.GAME_PAUSE, { soft: true });
+      // Animate skulls in
+      setTimeout(() => {
+        const skulls = this.el.querySelectorAll('.gameover-skull');
+        skulls.forEach((s, i) => setTimeout(() => s.classList.add('animate'), i * 220));
+      }, 150);
+    });
+  }
+}
+
+

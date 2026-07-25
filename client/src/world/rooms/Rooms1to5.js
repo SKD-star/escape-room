@@ -25,7 +25,7 @@ export class HauntedLibrary extends BaseRoom {
   buildRoom() {
     this.size = { width: 14, depth: 12, height: 4.6 };
     this.spawn.set(0, 1.2, 4.5);
-    this.setAtmosphere(0x0a0805, 0x14100a, 0.06, 0x2a2216, 0.4);
+    this.setAtmosphere(0x1a1510, 0x18120c, 0.03, 0x5a4a36, 1.2);
 
     this.buildShell({
       floor: createMaterial('planks', { base: '#33261a', seed: 12, repeat: 5 }),
@@ -44,14 +44,24 @@ export class HauntedLibrary extends BaseRoom {
     // Secret bookshelf — pulls away when the lever is found
     this.secretShelf = this.addStatic(createBookshelf({ seed: 43 }), 6.7, 1.5, -Math.PI / 2);
 
-    // Reading table with candles + note
+    // Reading table with candles + entry note
     const table = this.addStatic(createTable(), 0, 0);
     this.addStatic(createChair(), 0.1, 0.9, Math.PI);
     this.addCandle(-0.5, 0.83, 0.15);
     this.addCandle(0.55, 0.83, -0.2);
     this.placeNote(0, 0.84, 0.1,
       'The Librarian\'s Last Entry',
-      'They say every book in this room is a door,\nand every door is a test.\n\nThe whisper section — third shelf — holds what the living forget.\nCount the candles before you trust the dark.\n\nIf you are reading this, I am still here.\nI am always still here.');
+      'They say every book in this room is a door,\nand every door is a test.\n\nAn ancient scroll is hidden inside the third bookshelf in the Whisper Section (North-West wall).\nFollow the glowing golden beacon to find the scroll.\n\nIf you are reading this, I am still here.\nI am always still here.');
+
+    // Golden spotlight over the 3rd Bookshelf in the Whisper Section (-2.9, -5.6)
+    const shelfLight = new THREE.PointLight(0xffc857, 2.0, 6, 2);
+    shelfLight.position.set(-2.9, 2.2, -4.8);
+    this.group.add(shelfLight);
+
+    // Ancient Scroll on the third bookshelf in the Whisper Section (-2.9, 1.25, -4.8)
+    this.placeScroll(-2.9, 1.25, -4.8,
+      'The Hidden Scroll — Whisper Section Inscription',
+      'Unrolling the ancient parchment tucked inside the third bookshelf:\n\n"[CLUE]"\n\nKeep these physical counts in mind when examining the lectern.');
 
     // Candelabra ring
     this.addCandle(-4, 0.02, -3);
@@ -59,15 +69,26 @@ export class HauntedLibrary extends BaseRoom {
     this.addCandle(3.8, 0.02, 3);
     this.addCandle(-4.5, 0.02, 3.4);
 
-    // Paintings
+    // Paintings (4 paintings total)
     const p1 = createPainting({ seed: 2 });
     p1.position.set(-3, 2.4, -5.93); this.group.add(p1);
     const p2 = createPainting({ seed: 5 });
     p2.position.set(3, 2.4, -5.93); this.group.add(p2);
+    const p3 = createPainting({ seed: 8 });
+    p3.position.set(-3, 2.4, 5.93); p3.rotation.y = Math.PI; this.group.add(p3);
+    const p4 = createPainting({ seed: 11 });
+    p4.position.set(3, 2.4, 5.93); p4.rotation.y = Math.PI; this.group.add(p4);
 
-    // Ghost librarian drifting between the aisles
+    // 2 Stone Pillars framing the exit door
+    const pil1 = createStatue({ height: 2.2 });
+    pil1.position.set(-1.4, 0, -5.5); this.group.add(pil1);
+    const pil2 = createStatue({ height: 2.2 });
+    pil2.position.set(1.4, 0, -5.5); this.group.add(pil2);
+
+    // Ghost librarian floating near the center table
     this.ghost = createGhost();
-    this.ghost.position.set(-3, 0, -3);
+    this.ghost.position.set(2.2, 0, 0.5);
+    this.group.add(this.ghost);
     this.group.add(this.ghost);
     this.makeInteractable(this.ghost, 'Speak with the librarian', () => {
       bus.emit(Events.DIALOGUE_OPEN, {
@@ -78,6 +99,7 @@ export class HauntedLibrary extends BaseRoom {
 
     // Key hidden behind the secret shelf area
     this.placeKeyItem(6.5, 0.4, 3.6, 'brass_key', 'Brass Key');
+    this.setRequiredKey('brass_key');
 
     // Hidden lever between shelves opens the secret alcove
     const lever = createLever();
@@ -219,6 +241,7 @@ export class AncientTemple extends BaseRoom {
     });
 
     this.placeKeyItem(-4.3, 0.05, -6.8, 'serpent_idol', 'Serpent Idol', '🐍');
+    this.setRequiredKey('serpent_idol');
 
     this.puzzleAnchor = this.makeInteractable(altar, 'Study the altar',
       () => bus.emit('puzzle:open'));
@@ -275,6 +298,7 @@ export class ForgottenPrison extends BaseRoom {
 
     // One cell door is open (third cell) — key inside
     this.placeKeyItem(0.4, 0.05, -4.6, 'warden_key', 'Warden\'s Key');
+    this.setRequiredKey('warden_key');
     // remove bars visually for cell 3 entrance
     // (bars placed above cover all cells; add a gap by overlaying a dark doorway)
     const gap = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 3.4),
@@ -452,6 +476,7 @@ export class AbandonedLaboratory extends BaseRoom {
     });
 
     this.placeKeyItem(-6.35, 0.28, 3.4, 'vial_serum', 'Serum Vial', '🧪');
+    this.setRequiredKey('vial_serum');
 
     this.addStatic(createBarrel(), 6.5, 4.2);
     this.addStatic(createBarrel(), 5.8, 4.6);
@@ -579,6 +604,7 @@ export class AbandonedHospital extends BaseRoom {
     });
 
     this.placeKeyItem(4.6, 0.76, 0.4, 'morgue_tag', 'Morgue Tag', '🏷');
+    this.setRequiredKey('morgue_tag');
 
     // Sickly green emergency light + swinging lamp
     const emergency = new THREE.PointLight(0x3fd45f, 1.2, 9, 2);

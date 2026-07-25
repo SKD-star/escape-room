@@ -17,7 +17,7 @@ import { ManualScreen } from './ui/screens/ManualScreen.js';
 import { JournalScreen } from './ui/screens/JournalScreen.js';
 import { StatsScreen } from './ui/screens/StatsScreen.js';
 import {
-  NoteReader, DialogueBox, ObjectivesScreen, IntroScreen, EndingScreen,
+  NoteReader, DialogueBox, ObjectivesScreen, IntroScreen, EndingScreen, RoomLockedModal,
 } from './ui/screens/GameOverlays.js';
 
 async function boot() {
@@ -50,6 +50,11 @@ async function boot() {
   );
 
   game = new Game({ loading, hud, intro, ending, journal });
+
+  new RoomLockedModal(
+    () => game.restartRoom(),
+    () => game.toMenu(),
+  );
 
   new MainMenu({
     onNewGame: () => screens.show('difficulty'),

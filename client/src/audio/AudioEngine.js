@@ -28,7 +28,7 @@ export class AudioEngine {
     // Dynamic tension layer: dissonant pad that swells with haunt proximity
     bus.on('haunt:proximity', (level) => this.setTension(level));
     bus.on('settings:changed', ({ name }) => {
-      if (name.endsWith('Volume')) this.applyVolumes();
+      if (name.endsWith('Volume') || name === 'audioMuted') this.applyVolumes();
     });
   }
 
@@ -47,14 +47,24 @@ export class AudioEngine {
       this.buses[busName] = gain;
     }
     this.applyVolumes();
+    this.startBGM();
   }
 
   applyVolumes() {
     if (!this.ctx) return;
-    this.buses.master.gain.value = settings.get('masterVolume');
-    this.buses.music.gain.value = settings.get('musicVolume');
-    this.buses.sfx.gain.value = settings.get('sfxVolume');
-    this.buses.voice.gain.value = settings.get('voiceVolume');
+    const muted = settings.get('audioMuted');
+    this.buses.master.gain.value = muted ? 0 : settings.get('masterVolume');
+    this.buses.music.gain.value = muted ? 0 : settings.get('musicVolume');
+    this.buses.sfx.gain.value = muted ? 0 : settings.get('sfxVolume');
+    this.buses.voice.gain.value = muted ? 0 : settings.get('voiceVolume');
+    if (this.bgmGain) {
+      this.bgmGain.gain.value = muted ? 0 : settings.get('musicVolume') * 0.15;
+    }
+  }
+
+  /** Convenience mute/unmute toggle — persisted via settings. */
+  setMuted(muted) {
+    settings.set('audioMuted', muted);
   }
 
   // -- synthesis helpers --------------------------------------------------
@@ -91,7 +101,7 @@ export class AudioEngine {
   }
 
   /** Tonal blip/drone. */
-  tone({ freq = 220, type = 'sine', attack = 0.01, decay = 0.3, peak = 0.3, slideTo = null, when = 0, out = 'sfx' }) {
+  tone({ freq = 220, type = 'sine', attack = 0.01, decay = 0.3, peak = 0.3, slideTo = null, when = 0, out = 'sfx', loop = false }) {
     const osc = this.ctx.createOscillator();
     osc.type = type;
     osc.frequency.value = freq;
@@ -101,8 +111,10 @@ export class AudioEngine {
     }
     const env = this.envGain(attack, decay, peak, when);
     osc.connect(env).connect(this.buses[out]);
+    if (loop) osc.loop = true;
     osc.start(this.ctx.currentTime + when);
     osc.stop(this.ctx.currentTime + when + attack + decay + 0.1);
+    return { osc, env };
   }
 
   // -- sound effects ------------------------------------------------------
@@ -242,7 +254,61 @@ export class AudioEngine {
     }
   }
 
-  // -- ambience -----------------------------------------------------------
+  // -- ambience -------------------------------------------------------
+  /**
+   * BGM — Official Escape Room Soundtrack ("bgm.mp4").
+   * Routes through WebAudio music gain bus with loop and volume controls.
+   */
+  startBGM() {
+    if (this.bgmAudio) return;
+
+    const audio = new Audio('/bgm.mp4');
+    audio.loop = true;
+    audio.crossOrigin = 'anonymous';
+
+    if (this.ctx) {
+      try {
+        const source = this.ctx.createMediaElementSource(audio);
+        this.bgmGain = this.ctx.createGain();
+        this.bgmGain.gain.value = settings.get('musicVolume') * 0.45;
+        source.connect(this.bgmGain);
+        this.bgmGain.connect(this.buses.music);
+      } catch (err) {
+        console.warn('[AudioEngine] MediaElementSource fallback:', err);
+      }
+    }
+
+    audio.play().catch((err) => {
+      console.warn('[AudioEngine] Autoplay waiting for gesture:', err);
+    });
+
+    this.bgmAudio = audio;
+
+    // Listen for music volume changes
+    this._bgmVolHandler = bus.on('settings:changed', ({ name }) => {
+      if (name === 'musicVolume' || name === 'masterVolume' || name === 'audioMuted') {
+        if (this.bgmGain) {
+          const muted = settings.get('audioMuted');
+          this.bgmGain.gain.value = muted ? 0 : settings.get('musicVolume') * 0.45;
+        }
+      }
+    });
+  }
+
+  stopBGM() {
+    if (this._bgmVolHandler) {
+      this._bgmVolHandler();
+      this._bgmVolHandler = null;
+    }
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+      this.bgmAudio = null;
+    }
+    if (this.bgmGain) {
+      try { this.bgmGain.disconnect(); } catch { /* */ }
+      this.bgmGain = null;
+    }
+  }
 
   /**
    * Tension pad: two detuned oscillators a tritone apart whose gain follows

@@ -9,6 +9,6 @@
 # Until you set BACKEND_URL, the proxy simply fails and the game runs fully
 # offline (single-player) — which is the correct Phase-1 behaviour.
 
-/api/*    BACKEND_URL/api/:splat     200
-/admin    BACKEND_URL/admin/         200
-/admin/*  BACKEND_URL/admin/:splat   200
+/api/*    https://escape-room-api.onrender.com/api/:splat     200
+/admin    https://escape-room-api.onrender.com/admin/         200
+/admin/*  https://escape-room-api.onrender.com/admin/:splat   200

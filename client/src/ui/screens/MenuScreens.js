@@ -5,6 +5,7 @@
 import { html, screens } from '../ScreenManager.js';
 import { api } from '../../net/ApiClient.js';
 import { bus, Events } from '../../core/EventBus.js';
+import { ICONS } from '../icons.js';
 
 // ---------------------------------------------------------------------------
 // Pause
@@ -82,7 +83,8 @@ export class LeaderboardScreen {
     this.el = html`
       <div id="leaderboard-screen" class="backdrop">
         <div class="glass panel panel-wide">
-          <h2 class="heading">Leaderboard</h2>
+          <h2 class="heading" style="display:inline-flex;align-items:center;gap:10px">${ICONS.trophy} Hall of Fame</h2>
+          <p class="subtitle" style="margin-bottom:12px;font-size:0.75rem">The fastest souls to escape the rooms</p>
           <div class="lb-body" style="min-height:200px"></div>
           <button class="btn" data-action="back" style="align-self:flex-end">Back</button>
         </div>
@@ -94,34 +96,38 @@ export class LeaderboardScreen {
   }
 
   async load() {
-    this.body.innerHTML = '<p style="color:var(--fg-muted)">Consulting the archives…</p>';
+    this.body.innerHTML = '<p style="color:var(--fg-muted);text-align:center;padding:40px">⏳ Consulting the archives…</p>';
     const res = await api.getLeaderboard();
     if (!res.ok) {
-      this.body.innerHTML = '<p style="color:var(--fg-muted)">The archives are unreachable (offline mode).</p>';
+      this.body.innerHTML = '<p style="color:var(--fg-muted);text-align:center;padding:40px">🔮 The archives are unreachable (offline mode).</p>';
       return;
     }
     const rows = res.data.leaderboard;
     if (!rows.length) {
-      this.body.innerHTML = '<p style="color:var(--fg-muted)">No souls have escaped yet. Be the first.</p>';
+      this.body.innerHTML = '<p style="color:var(--fg-muted);text-align:center;padding:40px">⚰️ No souls have escaped yet. Be the first.</p>';
       return;
     }
+    const rankBadges = ['🥇 Gold', '🥈 Silver', '🥉 Bronze'];
     this.body.innerHTML = `
-      <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
-        <thead><tr style="text-align:left;color:var(--fg-muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.14em">
-          <th style="padding:8px">#</th><th>Player</th><th>Score</th><th>Time</th><th>Rooms</th><th>Ending</th>
+      <div style="overflow-x:auto">
+      <table class="leaderboard-table">
+        <thead><tr>
+          <th class="lb-rank">Rank</th><th class="lb-player">Player</th><th class="lb-score">Score</th>
+          <th class="lb-time">Time</th><th class="lb-rooms">Rooms</th><th class="lb-ending">Ending</th>
         </tr></thead>
         <tbody>
           ${rows.map((r, i) => `
-            <tr style="border-top:1px solid var(--border-ghost);${i < 3 ? 'color:var(--accent)' : ''}">
-              <td style="padding:10px 8px">${i + 1}</td>
-              <td>${escapeHtml(r.username)}</td>
-              <td>${r.score.toLocaleString()}</td>
-              <td>${formatTime(r.completion_time_s)}</td>
-              <td>${r.rooms_cleared}/10</td>
-              <td style="text-transform:capitalize">${escapeHtml(r.ending)}</td>
+            <tr class="lb-row ${i < 3 ? 'lb-top' : ''}" style="animation-delay:${i * 40}ms">
+              <td class="lb-rank">${i < 3 ? rankBadges[i] : `#${i + 1}`}</td>
+              <td class="lb-player">${escapeHtml(r.username)}</td>
+              <td class="lb-score">${r.score.toLocaleString()}</td>
+              <td class="lb-time">${formatTime(r.completion_time_s)}</td>
+              <td class="lb-rooms">${r.rooms_cleared}/10</td>
+              <td class="lb-ending ${r.ending === 'true' ? 'lb-true' : r.ending === 'dark' ? 'lb-dark' : ''}">${escapeHtml(r.ending)}</td>
             </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
   }
 }
 
@@ -134,8 +140,9 @@ export class AchievementsScreen {
     this.el = html`
       <div id="achievements-screen" class="backdrop">
         <div class="glass panel panel-wide">
-          <h2 class="heading">Achievements</h2>
-          <div class="ach-body inventory-grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"></div>
+          <h2 class="heading" style="display:inline-flex;align-items:center;gap:10px">${ICONS.medal} Achievements</h2>
+          <p class="subtitle" style="margin-bottom:12px;font-size:0.75rem">Feats accomplished across all runs</p>
+          <div class="ach-body inventory-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))"></div>
           <button class="btn" data-action="back" style="align-self:flex-end">Back</button>
         </div>
       </div>`;
@@ -150,21 +157,29 @@ export class AchievementsScreen {
     const local = JSON.parse(localStorage.getItem('escape_room_achievements') || '[]');
     let list = res.ok ? res.data.achievements : [];
     if (!list.length) {
-      // Offline fallback view from local unlocks
       list = local.map((code) => ({ code, title: code, description: '', unlocked: true, points: 0, secret: false }));
     }
     if (!list.length) {
-      this.body.innerHTML = '<p style="color:var(--fg-muted)">Play online to view the full achievement list.</p>';
+      this.body.innerHTML = '<p style="color:var(--fg-muted);text-align:center;padding:40px">📜 Play online to view the full achievement list.</p>';
       return;
     }
+    const achievementIcons = {
+      first_escape: ICONS.swords, collector: ICONS.key, bookworm: ICONS.book, ghost_whisperer: ICONS.star,
+      secret_finder: ICONS.star, light_bearer: ICONS.star, survivor: ICONS.medal, true_ending: ICONS.trophy,
+      speed_demon: ICONS.star, puzzle_master: ICONS.trophy, no_hints: ICONS.medal, half_way: ICONS.medal,
+    };
     this.body.innerHTML = '';
     for (const a of list) {
       const hidden = a.secret && !a.unlocked;
+      const icon = achievementIcons[a.code] || ICONS.medal;
       this.body.appendChild(html`
-        <div class="inv-slot" style="aspect-ratio:auto;padding:16px;text-align:left;align-items:flex-start;${a.unlocked ? 'border-color:var(--border-accent)' : 'opacity:0.55'}">
-          <div class="name" style="font-size:0.85rem;color:${a.unlocked ? 'var(--accent)' : 'var(--fg-secondary)'}">${hidden ? '???' : escapeHtml(a.title)}</div>
-          <div style="font-size:0.75rem;color:var(--fg-muted)">${hidden ? 'A secret remains hidden.' : escapeHtml(a.description)}</div>
-          <div class="label" style="margin-top:auto">${a.points} pts</div>
+        <div class="ach-card ${a.unlocked ? 'unlocked' : 'locked'}">
+          <div class="ach-icon">${hidden ? '?' : icon}</div>
+          <div class="ach-info">
+            <div class="ach-title">${hidden ? '???' : escapeHtml(a.title)}</div>
+            <div class="ach-desc">${hidden ? 'A secret remains hidden.' : escapeHtml(a.description || 'No description')}</div>
+          </div>
+          <div class="ach-points">${a.points || 0} pts</div>
         </div>`);
     }
   }

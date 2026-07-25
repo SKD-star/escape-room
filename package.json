@@ -4,14 +4,14 @@
   "description": "AI Powered Escape Room — a browser-based 3D horror escape game built with Three.js, Rapier physics, Flask and OpenAI",
   "type": "module",
   "scripts": {
-    "start": "node scripts/dev.js",
+    "start": "npm run dev",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node scripts/py.js server/app.py",
-    "setup:db": "node scripts/py.js server/scripts/init_db.py",
-    "seed": "node scripts/py.js server/scripts/seed.py",
-    "create:admin": "node scripts/py.js server/scripts/create_admin.py"
+    "server": "venv\\Scripts\\python.exe server/app.py",
+    "setup:db": "venv\\Scripts\\python.exe server/scripts/init_db.py",
+    "seed": "venv\\Scripts\\python.exe server/scripts/seed.py",
+    "create:admin": "venv\\Scripts\\python.exe server/scripts/create_admin.py"
   },
   "keywords": [
     "threejs",
@@ -29,7 +29,7 @@
     "three": "^0.185.1"
   },
   "devDependencies": {
-    "puppeteer-core": "^25.3.0",
     "vite": "^8.1.5"
   }
 }
+
