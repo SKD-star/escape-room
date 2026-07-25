@@ -1,35 +1,10 @@
 {
   "name": "ai-powered-escape-room",
   "version": "1.0.0",
-  "description": "AI Powered Escape Room — a browser-based 3D horror escape game built with Three.js, Rapier physics, Flask and OpenAI",
+  "private": true,
   "type": "module",
   "scripts": {
-    "start": "npm run dev",
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "server": "venv\\Scripts\\python.exe server/app.py",
-    "setup:db": "venv\\Scripts\\python.exe server/scripts/init_db.py",
-    "seed": "venv\\Scripts\\python.exe server/scripts/seed.py",
-    "create:admin": "venv\\Scripts\\python.exe server/scripts/create_admin.py"
-  },
-  "keywords": [
-    "threejs",
-    "escape-room",
-    "horror-game",
-    "ai",
-    "webgl"
-  ],
-  "author": "Final Year Project",
-  "license": "MIT",
-  "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.19.3",
-    "gsap": "^3.15.0",
-    "postprocessing": "^6.39.3",
-    "three": "^0.185.1"
-  },
-  "devDependencies": {
-    "vite": "^8.1.5"
+    "build": "node scripts/build-netlify.mjs",
+    "dev": "npm run dev --prefix client"
   }
 }
-
