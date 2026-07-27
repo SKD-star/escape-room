@@ -130,7 +130,6 @@ export class HauntedLibrary extends BaseRoom {
     const lectern = this.addStatic(createTable({ width: 0.7, depth: 0.5, height: 1.05 }), 0, -4.4);
     this.puzzleAnchor = this.makeInteractable(lectern, 'Examine the lectern',
       () => bus.emit('puzzle:open'));
-    this.addCandle(-0.3, 1.1, -4.3);
 
     // Fireplace glow + embers
     const embers = new Embers({ count: 30 });
@@ -227,7 +226,7 @@ export class AncientTemple extends BaseRoom {
 
     this.placeNote(0.4, 0.92, -2.8,
       'Carved Warning',
-      'The serpent swallows the unworthy.\n\nFive marks upon the wall.\nThey burned in an order once —\nthe offering remembers, the fire forgets.\n\nSpeak to the keeper if your courage fails.');
+      'The serpent swallows the unworthy.\n\n"[CLUE]"\n\nSpeak to the keeper if your courage fails.');
 
     // Ghost priest
     this.ghost = createGhost();
@@ -277,48 +276,48 @@ export class ForgottenPrison extends BaseRoom {
       ceiling: wall,
     });
 
-    // Cell block: barred cells along the north wall
+    // Cell block: 4 barred cells along the west/northwest section (x = -6.8 to -1.2)
     const barMat = plainMaterial(0x3c3a36, { metalness: 0.8, roughness: 0.5 });
     for (let c = 0; c < 4; c++) {
-      const cellX = -6.4 + c * 3.4;
-      // dividing walls
+      const cellX = -6.5 + c * 1.8;
+      // dividing walls between cells
       const divider = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.6, 3), wall);
-      divider.position.set(cellX + 1.7, 1.8, -4.5);
+      divider.position.set(cellX + 0.9, 1.8, -4.5);
       divider.castShadow = divider.receiveShadow = true;
       this.group.add(divider);
-      this.physics.addStaticBox({ x: cellX + 1.7, y: 1.8, z: -4.5 }, { x: 0.08, y: 1.8, z: 1.5 });
-      // bars
-      for (let b = 0; b < 8; b++) {
+      this.physics.addStaticBox({ x: cellX + 0.9, y: 1.8, z: -4.5 }, { x: 0.08, y: 1.8, z: 1.5 });
+      // bars across cell front
+      for (let b = 0; b < 4; b++) {
+        if (c === 2 && b >= 1 && b <= 2) continue; // open gap entrance for Cell 3 key
         const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 3.6, 6), barMat);
-        bar.position.set(cellX + b * 0.35 - 1.4, 1.8, -3);
+        bar.position.set(cellX + b * 0.4 - 0.6, 1.8, -3);
         this.group.add(bar);
       }
-      this.physics.addStaticBox({ x: cellX, y: 1.8, z: -3 }, { x: 1.55, y: 1.8, z: 0.05 });
+      if (c !== 2) {
+        this.physics.addStaticBox({ x: cellX, y: 1.8, z: -3 }, { x: 0.85, y: 1.8, z: 0.05 });
+      }
     }
 
-    // One cell door is open (third cell) — key inside
-    this.placeKeyItem(0.4, 0.05, -4.6, 'warden_key', 'Warden\'s Key');
+    // Key inside Cell 3
+    this.placeKeyItem(-2.9, 0.05, -4.6, 'warden_key', 'Warden\'s Key');
     this.setRequiredKey('warden_key');
-    // remove bars visually for cell 3 entrance
-    // (bars placed above cover all cells; add a gap by overlaying a dark doorway)
-    const gap = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 3.4),
-      plainMaterial(0x0a0a0c, { roughness: 1 }));
-    gap.position.set(0.4, 1.7, -2.99);
-    this.group.add(gap);
 
-    // Hanging chains
+    // 4 Hanging chains from ceiling
     for (const [x, z] of [[-3, 1], [2, 2.5], [5, -1], [-5.5, -0.5]]) {
       const chain = createChain({ links: 10 });
       chain.position.set(x, 3.5, z);
       this.group.add(chain);
     }
 
-    // Interrogation table
-    const table = this.addStatic(createTable({ width: 1.2, depth: 0.7 }), 3, 0.5, 0.4);
-    this.addStatic(createChair(), 3.5, 1.4, Math.PI + 0.4);
-    this.placeNote(3, 0.84, 0.4,
+    // 2 Interrogation tables and 2 chairs in the right wing
+    const table1 = this.addStatic(createTable({ width: 1.2, depth: 0.7 }), 3.0, 0.5, 0.4);
+    this.addStatic(createChair(), 3.6, 0.5, Math.PI + 0.4);
+    const table2 = this.addStatic(createTable({ width: 1.2, depth: 0.7 }), 3.0, -1.8, 0.4);
+    this.addStatic(createChair(), 3.6, -1.8, Math.PI + 0.4);
+
+    this.placeNote(3.0, 0.84, 0.4,
       'Incident Report — Cell 3',
-      'Prisoner 47 refused to eat again.\nClaims the walls "count with him" at night.\n\nFound his cell empty this morning.\nDoor still locked. Bars intact.\n\nThe scratches on the ceiling spell numbers.\nWe stopped looking up.');
+      'Prisoner 47 refused to eat again.\nClaims the walls "count with him" at night.\n\n"[CLUE]"\n\nFound his cell empty this morning.\nDoor still locked. Bars intact.');
 
     // Swinging lamp — the only strong light
     this.lamp = new THREE.Group();
@@ -453,7 +452,7 @@ export class AbandonedLaboratory extends BaseRoom {
 
     this.placeNote(0.4, 0.96, 2.1,
       'Research Log — Day 214',
-      'Subject 47 shows accelerated regeneration.\nDr. Halvorsen insists we continue.\n\nThe sequence matters:\nfirst the serum, then the voltage, then prayer.\n\nIf the tanks go dark, do not stay to see\nwhat wakes up. The code is where we keep\nthe dead — read the labels backwards.');
+      'Subject 47 shows accelerated regeneration.\nDr. Halvorsen insists we continue.\n\n"[CLUE]"\n\nIf the tanks go dark, do not stay to see what wakes up.');
 
     // Terminal — puzzle anchor
     const terminal = createTerminal({ screenColor: 0x2bc78a });
@@ -557,7 +556,7 @@ export class AbandonedHospital extends BaseRoom {
 
     this.placeNote(-1.5, 0.74, -3.4,
       'Patient Chart — East Ward',
-      'Patient: [name water-damaged]\nAdmitted: for observation.\nStatus: deceased. Status: deceased.\nStatus: awake.\n\nNurse\'s addendum, different handwriting:\nIt keeps pressing the call button.\nWe unplugged the call button.\nIt keeps pressing.');
+      'Patient: [name water-damaged]\nAdmitted: for observation.\n\n"[CLUE]"\n\nNurse\'s addendum: It keeps pressing the call button. We unplugged the call button.');
 
     // Wheelchair (built from primitives)
     const wheelchair = new THREE.Group();

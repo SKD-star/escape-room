@@ -17,6 +17,7 @@ import { SpeedrunTimer } from './player/SpeedrunTimer.js';
 import { LevelTimer } from './player/LevelTimer.js';
 import { AttemptsTracker } from './player/AttemptsTracker.js';
 import { InteractionSystem } from './player/InteractionSystem.js';
+import { FirstPersonHands } from './player/FirstPersonHands.js';
 import { RoomManager } from './world/RoomManager.js';
 import { HauntSystem } from './world/HauntSystem.js';
 import { PuzzleManager } from './puzzles/PuzzleManager.js';
@@ -91,7 +92,8 @@ export class Game {
 
     this.ui.loading.setProgress(0.6, 'Assembling the vessel…');
     this.player = new FPSController(this.engine, this.physics);
-    this.interactions = new InteractionSystem(this.engine, this.physics);
+    this.hands = new FirstPersonHands(this.engine);
+    this.interactions = new InteractionSystem(this.engine, this.physics, this.hands);
     this.flashlight = new Flashlight(this.engine, () => Boolean(this.interactions.inspecting));
     this.sanity = new SanitySystem(this.engine, this.flashlight);
     this.inventory = new Inventory();
@@ -126,11 +128,8 @@ export class Game {
     this.engine.addSystem({ update: (dt, t) => this.rooms.update(dt, t) });
     this.engine.addSystem({ update: (dt) => this.gamepad.update(dt) });
     this.engine.addSystem({ update: (dt) => this.touch.update(dt) });
-    this.engine.addSystem({ update: (dt) => { if (this.isPlaying) this.timer.update(dt); } });
-    // LevelTimer kept for room-entry events / par tracking; countdown display removed from HUD.
     this.engine.addSystem({ update: (dt) => this.levelTimer.update(dt) });
     this.engine.addSystem({ update: (dt) => this.perfGuard.update(dt) });
-    this.engine.addSystem({ update: (dt) => { this.attemptsTracker.enabled = this.isPlaying; } });
     this.engine.addSystem({
       update: (dt) => {
         if (this.isPlaying) {
@@ -179,6 +178,7 @@ export class Game {
     this.flags = {};
     this.inventory.restore([]);
     this.sanity.reset();
+    this.attemptsTracker.reset();
     this.ui.journal?.restore([]);
     this.timer.start();
     bus.emit('stats:runStarted');

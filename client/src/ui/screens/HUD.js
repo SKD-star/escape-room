@@ -15,6 +15,7 @@ export class HUD {
       <div id="hud">
         <div class="hud-crosshair"></div>
         <div class="hud-compass"><div class="tape"></div><div class="tick"></div></div>
+        <div class="hud-countdown"><span class="cd-icon">⏱️</span><span class="cd-clock">3:30</span></div>
         <div class="hud-timer"><span class="clock">0:00.0</span><span class="split"></span></div>
         <div class="hud-attempts" title="Attempts remaining this run">
           <span class="attempts-label">ATTEMPTS</span>
@@ -48,6 +49,11 @@ export class HUD {
           <span class="icon">🔦</span>
           <div class="battery"><div class="fill" style="width:100%"></div></div>
         </div>
+        <div class="hud-journal-btn glass" title="Open Journal — J">
+          <span class="icon">📜</span>
+          <span class="journal-label">Journal [J]</span>
+          <span class="journal-badge">0</span>
+        </div>
         <div class="hud-fps">-- fps</div>
       </div>`;
 
@@ -76,6 +82,9 @@ export class HUD {
     this.attemptsEl = this.el.querySelector('.hud-attempts');
     this.attemptPips = this.el.querySelectorAll('.attempt-pip');
     this.captions = this.el.querySelector('.hud-captions');
+    this.journalBtn = this.el.querySelector('.hud-journal-btn');
+    this.journalBadge = this.el.querySelector('.journal-badge');
+    this.journalBtn?.addEventListener('click', () => screens.show('journal'));
 
     screens.register('hud', this.el, { persistent: true });
     this.bind();
@@ -131,14 +140,39 @@ export class HUD {
       gsap.fromTo(this.timerSplit, { opacity: 1 }, { opacity: 0, duration: 1.2, delay: 4 });
     });
 
-    // Per-room difficulty countdown — events handled but display suppressed
-    // (countdown timer removed from HUD per design; LevelTimer still runs internally)
-    bus.on('countdown:begin', () => {});
-    bus.on('countdown:tick', () => {});
-    bus.on('countdown:expired', () => {});
-    bus.on('countdown:timeout', () => {});
-    bus.on('countdown:cleared', () => {});
-    bus.on('countdown:hidden', () => {});
+    this.countdownEl = this.el.querySelector('.hud-countdown');
+    this.countdownClock = this.el.querySelector('.hud-countdown .cd-clock');
+
+    // Per-room difficulty countdown — active in Nightmare mode
+    bus.on('countdown:begin', ({ remaining, limit, harsh }) => {
+      if (this.countdownEl) {
+        this.countdownEl.classList.add('visible');
+        this.countdownEl.classList.toggle('harsh', harsh);
+        this.renderCountdown(remaining, limit);
+      }
+    });
+
+    bus.on('countdown:tick', ({ remaining, limit }) => {
+      if (this.countdownEl) {
+        this.renderCountdown(remaining, limit);
+      }
+    });
+
+    bus.on('countdown:cleared', () => {
+      if (this.countdownEl) {
+        this.countdownEl.classList.remove('visible', 'warn', 'urgent');
+      }
+    });
+
+    bus.on('countdown:hidden', () => {
+      if (this.countdownEl) {
+        this.countdownEl.classList.remove('visible', 'warn', 'urgent');
+      }
+    });
+
+    bus.on('journal:count', (count) => {
+      if (this.journalBadge) this.journalBadge.textContent = String(count);
+    });
 
     // Attempts tracker — pip icon display (☽ = active, ☠ = lost)
     const updatePips = (remaining) => {
@@ -151,14 +185,12 @@ export class HUD {
     };
 
     bus.on('attempts:begin', ({ remaining }) => {
-      this.attemptsEl.classList.add('visible');
-      this.attemptsEl.classList.remove('last-attempt', 'exhausted');
+      this.attemptsEl.classList.remove('visible');
       updatePips(remaining);
     });
     bus.on('attempts:failed', ({ remaining }) => {
+      this.attemptsEl.classList.remove('visible');
       updatePips(remaining);
-      if (remaining === 1) this.attemptsEl.classList.add('last-attempt');
-      gsap.fromTo(this.attemptsEl, { scale: 1.25 }, { scale: 1, duration: 0.35, ease: 'elastic.out(1, 0.5)' });
     });
     bus.on('attempts:exhausted', () => {
       updatePips(0);
@@ -268,10 +300,23 @@ export class HUD {
   showRoomTitle(name, chapter) {
     this.roomTitle.querySelector('h2').textContent = name;
     this.roomTitle.querySelector('p').textContent = chapter ?? '';
+    gsap.killTweensOf(this.roomTitle);
+    this.roomTitle.style.display = 'block';
+
     gsap.timeline()
       .set(this.roomTitle, { opacity: 0, y: 14 })
-      .to(this.roomTitle, { opacity: 1, y: 0, duration: 1.1, ease: 'expo.out' })
-      .to(this.roomTitle, { opacity: 0, duration: 1.4, ease: 'power2.in' }, '+=2.6');
+      .to(this.roomTitle, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out' })
+      .to(this.roomTitle, {
+        opacity: 0, y: -16, duration: 0.6, ease: 'power2.in',
+        onComplete: () => {
+          this.roomTitle.style.display = 'none';
+        }
+      }, '+=1.6');
+
+    setTimeout(() => {
+      this.roomTitle.style.display = 'none';
+      this.roomTitle.style.opacity = '0';
+    }, 2900);
   }
 
   /** Per-level "how to play this room" card — slides in after the title, holds for 4.5s, fades. */

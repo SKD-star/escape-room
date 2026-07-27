@@ -131,10 +131,10 @@ export class Engine {
     if (q.ssao) {
       this.ssao = new SSAOEffect(this.camera, null, {
         blendFunction: BlendFunction.MULTIPLY,
-        samples: 16,
-        rings: 4,
-        radius: 0.14,
-        intensity: 2.2,
+        samples: 8,
+        rings: 3,
+        radius: 0.12,
+        intensity: 1.8,
         luminanceInfluence: 0.6,
         bias: 0.02,
         distanceScaling: true,
@@ -200,7 +200,7 @@ export class Engine {
     const h = window.innerHeight;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * this.quality.pixelRatio);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25) * this.quality.pixelRatio);
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
   }

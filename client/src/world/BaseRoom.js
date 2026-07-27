@@ -430,15 +430,16 @@ export class BaseRoom {
     note.userData.interactable = {
       label: 'Read note',
       onInteract: () => {
-        const clueText = this.puzzleClue ?? 'Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door';
+        const clueText = this.puzzleClue ?? 'Observe the library relics from center to exit door:\nI. Reading Lecterns in the center\nII. Ancestral Wall Paintings in the gallery\nIII. Lit Candles placed around the room\nIV. Stone Pillars framing the exit door\n\nCount each physical relic group in order to deduce the lock code.';
         let finalBody = body;
         if (finalBody.includes('[CLUE]')) {
           finalBody = finalBody.replace('[CLUE]', clueText);
-        } else {
+        } else if (!finalBody.includes(clueText)) {
           finalBody = `${finalBody}\n\n📜 Inscription Clue:\n"${clueText}"`;
         }
         bus.emit(Events.NOTE_OPEN, { title, body: finalBody });
         bus.emit(Events.TOAST, { text: '📜 Note logged to Journal (Press J to view)', type: 'info', duration: 4000 });
+        bus.emit(Events.OBJECTIVE_CHANGED, 'Clue discovered! Examine the puzzle anchor mechanism.');
       },
     };
     this.interactions.register(note);
@@ -478,15 +479,16 @@ export class BaseRoom {
     scroll.userData.interactable = {
       label: `Read ${title}`,
       onInteract: () => {
-        const clueText = this.puzzleClue ?? 'Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door';
+        const clueText = this.puzzleClue ?? 'Observe the library relics from center to exit door:\nI. Reading Lecterns in the center\nII. Ancestral Wall Paintings in the gallery\nIII. Lit Candles placed around the room\nIV. Stone Pillars framing the exit door\n\nCount each physical relic group in order to deduce the lock code.';
         let finalBody = body;
         if (finalBody.includes('[CLUE]')) {
           finalBody = finalBody.replace('[CLUE]', clueText);
-        } else {
+        } else if (!finalBody.includes(clueText)) {
           finalBody = `${finalBody}\n\n📜 Inscription Clue:\n"${clueText}"`;
         }
         bus.emit(Events.NOTE_OPEN, { title, body: finalBody });
         bus.emit(Events.TOAST, { text: '📜 Scroll logged to Journal (Press J to view)', type: 'info', duration: 4000 });
+        bus.emit(Events.OBJECTIVE_CHANGED, 'Clue discovered! Examine the puzzle anchor mechanism.');
       },
     };
     this.interactions.register(scroll);

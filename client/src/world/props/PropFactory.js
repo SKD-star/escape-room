@@ -254,14 +254,14 @@ export function createStatue({ height = 1.9 } = {}) {
 }
 
 /** Hanging chain made of torus links. */
-export function createChain({ links = 8 } = {}) {
+export function createChain({ links = 14 } = {}) {
   const group = new THREE.Group();
-  const mat = plainMaterial(0x4a463f, { metalness: 0.85, roughness: 0.5 });
-  const geo = new THREE.TorusGeometry(0.045, 0.012, 6, 12);
+  const mat = plainMaterial(0x6a6d72, { metalness: 0.9, roughness: 0.3 });
+  const geo = new THREE.TorusGeometry(0.07, 0.02, 8, 16);
   for (let i = 0; i < links; i++) {
     const link = mesh(geo, mat);
-    link.position.y = -i * 0.075;
-    link.rotation.y = (i % 2) * Math.PI / 2;
+    link.position.y = -i * 0.12;
+    link.rotation.y = (i % 2) * (Math.PI / 2);
     group.add(link);
   }
   return group;

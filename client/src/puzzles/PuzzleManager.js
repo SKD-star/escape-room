@@ -52,6 +52,7 @@ export class PuzzleManager {
 
     bus.on(Events.ROOM_ENTERED, ({ key, theme }) => this.prepare(key, theme));
     bus.on('puzzle:open', () => this.open());
+    bus.on('attempts:exhausted', () => this.close());
   }
 
   // -- lifecycle ----------------------------------------------------------
@@ -72,18 +73,18 @@ export class PuzzleManager {
 
     const base = Math.max(0.05, Math.min(0.95, 0.5 + difficulty.mode.puzzleBias));
     this.puzzle = await aiClient.getPuzzle(theme, roomKey, base);
-    if (this.puzzle) {
-      if (this.puzzle.type === 'sequence' && Array.isArray(this.puzzle.sequence)) {
-        const names = this.puzzle.sequence.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
-        this.puzzle.clue = `Sacred Ritual Sequence Order: 1. ${names[0]} ➔ 2. ${names[1]} ➔ 3. ${names[2]} ➔ 4. ${names[3] || names[2]}`;
-      } else if (this.puzzle.type === 'keypad' && this.puzzle.code) {
-        this.puzzle.clue = `Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door`;
-      } else if (this.puzzle.type === 'riddle' && this.puzzle.riddle) {
-        this.puzzle.clue = `Riddle Inscription: "${this.puzzle.riddle}" (Answer: "${(this.puzzle.answer || '').toUpperCase()}")`;
+    if (this.puzzle && !this.puzzle.clue) {
+      if (this.puzzle.type === 'sequence') {
+        this.puzzle.clue = 'Examine the room notes and environment to deduce the sacred ritual symbol order.';
+      } else if (this.puzzle.type === 'keypad') {
+        this.puzzle.clue = 'Observe the room physical relics in sequence and count them to form the code.';
+      } else if (this.puzzle.type === 'riddle') {
+        this.puzzle.clue = `Riddle Inscription: "${this.puzzle.riddle}"`;
       }
     }
-    this.startedAt = performance.now();
     bus.emit('puzzle:clue:ready', { roomKey, clue: this.puzzle?.clue });
+
+    this.startedAt = performance.now();
     bus.emit(Events.OBJECTIVE_CHANGED, 'Explore the room to find clues, then solve the mechanism.');
 
     // Progressive clue system:
@@ -118,21 +119,24 @@ export class PuzzleManager {
     }
   }
 
-  open() {
+  async open() {
     if (this.solved) {
       bus.emit(Events.TOAST, { text: 'This mechanism has already yielded.' });
       return;
     }
     if (!this.puzzle) {
-      // Instant synchronous fallback so the mechanism NEVER blocks the player
-      this.puzzle = {
-        type: 'keypad',
-        title: 'The Librarian\'s Lock',
-        narrative: 'A heavy brass keypad seals the exit. Observe the room\'s physical relics.',
-        code: '1462',
-        clue: 'Observe the room features in order:\nI. Reading Lecterns in the center\nII. Paintings hanging on the walls\nIII. Candles lit around the room\nIV. Stone Pillars framing the exit door',
-      };
-      bus.emit('puzzle:clue:ready', { roomKey: this.roomKey, clue: this.puzzle.clue });
+      const base = Math.max(0.05, Math.min(0.95, 0.5 + difficulty.mode.puzzleBias));
+      this.puzzle = await aiClient.getPuzzle(this.theme || 'library', this.roomKey || 'haunted_library', base);
+      if (this.puzzle && !this.puzzle.clue) {
+        if (this.puzzle.type === 'sequence') {
+          this.puzzle.clue = 'Examine the room notes and environment to deduce the sacred ritual symbol order.';
+        } else if (this.puzzle.type === 'keypad') {
+          this.puzzle.clue = 'Observe the room physical relics in sequence and count them to form the code.';
+        } else if (this.puzzle.type === 'riddle') {
+          this.puzzle.clue = `Riddle Inscription: "${this.puzzle.riddle}"`;
+        }
+      }
+      bus.emit('puzzle:clue:ready', { roomKey: this.roomKey, clue: this.puzzle?.clue });
     }
     bus.emit(Events.PUZZLE_STARTED, this.puzzle);
     this.renderPuzzle();
@@ -171,6 +175,9 @@ export class PuzzleManager {
           <div class="puzzle-body"></div>
           <p class="puzzle-feedback" aria-live="polite"></p>
           <div class="puzzle-actions">
+            <button class="btn btn-ghost" data-action="journal">
+              <span style="margin-right:4px">📜</span> Journal
+            </button>
             <button class="btn btn-ghost" data-action="hint">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
               Hint
@@ -189,6 +196,9 @@ export class PuzzleManager {
     this.hintEl = this.el.querySelector('.puzzle-hint');
     this.el.querySelector('[data-action="close"]').addEventListener('click', () => this.close());
     this.el.querySelector('[data-action="hint"]').addEventListener('click', () => this.requestHint());
+    this.el.querySelector('[data-action="journal"]').addEventListener('click', () => {
+      screens.show('journal');
+    });
 
     // Listen to attempts updates to refresh pip indicators
     bus.on('attempts:begin', ({ remaining }) => this._updatePips(remaining));
@@ -199,15 +209,26 @@ export class PuzzleManager {
   }
 
   _updatePips(remaining) {
-    const pips = this.el.querySelectorAll('.attempt-pip');
-    pips.forEach((pip, i) => {
-      pip.classList.toggle('active', i < remaining);
-      pip.classList.toggle('lost', i >= remaining);
-    });
+    const container = this.el.querySelector('.puzzle-attempts-indicator');
+    if (!container) return;
+    if (difficulty.key === 'story') {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = 'flex';
+    const rem = remaining ?? 3;
+    container.innerHTML = `
+      <span class="attempts-title">ATTEMPTS:</span>
+      <span class="attempt-pip ${rem >= 1 ? 'active' : 'lost'}">${rem >= 1 ? '☽' : '☠'}</span>
+      <span class="attempt-pip ${rem >= 2 ? 'active' : 'lost'}">${rem >= 2 ? '☽' : '☠'}</span>
+      <span class="attempt-pip ${rem >= 3 ? 'active' : 'lost'}">${rem >= 3 ? '☽' : '☠'}</span>
+    `;
   }
 
   renderPuzzle() {
     const p = this.puzzle;
+    const rem = window.__game?.attemptsTracker?.remaining ?? 3;
+    this._updatePips(rem);
     const typeBadge = this.el.querySelector('.puzzle-type-badge');
     typeBadge.textContent = p.type === 'keypad' ? 'KEYPAD LOCK' : p.type === 'riddle' ? 'RIDDLE' : 'SEQUENCE';
     this.el.querySelector('.puzzle-title').textContent = p.title ?? 'The Mechanism';
@@ -325,7 +346,7 @@ export class PuzzleManager {
 
     const refresh = () => {
       pickedDisplay.innerHTML = this.sequencePick.length
-        ? this.sequencePick.map((s) => `<span class="picked-symbol">${SYMBOL_ICONS[s] ?? s[0]?.toUpperCase() ?? '?'}</span>`).join('')
+        ? this.sequencePick.map((s, idx) => `<span class="picked-symbol" title="Step ${idx + 1}">${idx + 1}. ${SYMBOL_ICONS[s] ?? s[0]?.toUpperCase() ?? '?'}</span>`).join('')
         : '<span class="picked-placeholder">— select symbols in order —</span>';
     };
     refresh();
@@ -434,13 +455,9 @@ export class PuzzleManager {
     const tier = Math.min(2, this.hintsUsed);
     this.hintsUsed += 1;
     bus.emit(Events.HINT_REQUESTED, { tier });
-    if (this.puzzle?.clue) {
-      this.hintEl.textContent = this.puzzle.clue;
-    } else {
-      this.hintEl.textContent = 'The spirits consider…';
-      const hint = await aiClient.getHint(this.puzzle, tier);
-      this.hintEl.textContent = hint;
-    }
+    this.hintEl.textContent = 'The spirits consider…';
+    const hint = await aiClient.getHint(this.puzzle, tier);
+    this.hintEl.textContent = hint;
     gsap.fromTo(this.hintEl, { opacity: 0 }, { opacity: 1, duration: 0.8 });
   }
 

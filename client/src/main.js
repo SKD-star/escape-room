@@ -52,7 +52,7 @@ async function boot() {
   game = new Game({ loading, hud, intro, ending, journal });
 
   new RoomLockedModal(
-    () => game.restartRoom(),
+    () => game.newGame(),
     () => game.toMenu(),
   );
 

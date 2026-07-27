@@ -342,11 +342,18 @@ export class RoomLockedModal {
       screens.show('room-locked');
       bus.emit(Events.PLAY_SOUND, { name: 'error' });
       bus.emit(Events.GAME_PAUSE, { soft: true });
+
       // Animate skulls in
       setTimeout(() => {
         const skulls = this.el.querySelectorAll('.gameover-skull');
-        skulls.forEach((s, i) => setTimeout(() => s.classList.add('animate'), i * 220));
-      }, 150);
+        skulls.forEach((s, i) => setTimeout(() => s.classList.add('animate'), i * 180));
+      }, 100);
+
+      // Automatic restart from Room 1 after 2.5 seconds (no manual button press needed)
+      setTimeout(() => {
+        screens.hide('room-locked');
+        this.onRestart?.();
+      }, 2500);
     });
   }
 }

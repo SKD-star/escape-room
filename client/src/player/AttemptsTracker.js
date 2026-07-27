@@ -22,16 +22,17 @@
  *   Events.ROOM_CLEARED        → hide (room completed)
  */
 import { bus, Events } from '../core/EventBus.js';
+import { difficulty } from '../config/difficulty.js';
 
 export class AttemptsTracker {
   constructor() {
-    this.enabled = false;
+    this.enabled = difficulty.key !== 'story';
     this.maxAttempts = 3;
     this.remaining = this.maxAttempts;
     this.roomKey = null;
     this.exhausted = false;
 
-    // Listen for FULL submission failures only (not per-keypress errors)
+    // Listen for FULL submission failures only
     bus.on('puzzle:submit:failed', () => this.onFailed());
     bus.on(Events.PUZZLE_SOLVED, () => this.onSolved());
     bus.on(Events.ROOM_CLEARED, () => this.hide());
@@ -40,7 +41,7 @@ export class AttemptsTracker {
   /** Called when entering the first room of a run */
   begin(key) {
     this.roomKey = key;
-    // Don't reset remaining on room change — attempts persist across rooms per run
+    this.enabled = difficulty.key !== 'story';
     if (!this.enabled) {
       bus.emit('attempts:hidden');
       return;

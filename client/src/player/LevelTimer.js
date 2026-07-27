@@ -46,10 +46,11 @@ export class LevelTimer {
 
   /** Whether a countdown should run at all right now. */
   get active() {
-    return this.enabled && Boolean(this.config) && settings.get('countdownTimer');
+    return Boolean(this.config) && (difficulty.key === 'nightmare' || settings.get('countdownTimer'));
   }
 
   begin(key) {
+    this.enabled = true;
     const room = campaign.get(key);
     const cfg = this.config;
     if (!room || !cfg || !this.active) {
@@ -97,10 +98,12 @@ export class LevelTimer {
       this.expired = true;
       const cfg = this.config;
 
-      // Hard deadline (Nightmare): fail the room. Stop here — Game restarts it.
+      // Hard deadline (Nightmare): fail the room. Automatically restart run.
       if (cfg.failOnTimeout) {
         this.running = false;
         bus.emit('countdown:timeout');
+        bus.emit(Events.TOAST, { text: 'Time expired! Nightmare consumes the room.', type: 'danger', duration: 3000 });
+        bus.emit('attempts:exhausted');
         return;
       }
 

@@ -350,7 +350,7 @@ export class SecretBunker extends BaseRoom {
 
     this.placeNote(-5.2, 1.32, 1,
       'Final Transmission — 0347 hours',
-      'To anyone receiving:\nDo not answer the frequency that answers back.\n\nWe thought it was survivors.\nIt counts our heartbeats through the walls.\n\nProtocol says destroy the codebook.\nI hid it instead. Under where we sleep.\nForgive me. It promised to let me out.');
+      'To anyone receiving:\nDo not answer the frequency that answers back.\n\n"[CLUE]"\n\nProtocol says destroy the codebook. I hid it under where we sleep.');
 
     // codebook under bunk
     this.placeKeyItem(-5.2, 0.2, -1.2, 'codebook', 'Cipher Codebook', '📕');
@@ -646,7 +646,7 @@ export class BossRoom extends BaseRoom {
 
     this.placeNote(0.7, 1.2, -0.8,
       'The First Page (you wrote this)',
-      'If you are reading this, you made it to the end,\nwhich means you finally remember writing it.\n\nThe rooms were never a prison.\nThey were a memory palace,\nand something moved in.\n\nSay the answer. Or stay and keep building rooms.\nBoth are allowed. Only one is escape.');
+      'If you are reading this, you made it to the end.\n\n"[CLUE]"\n\nSay the answer. Or stay and keep building rooms.\nBoth are allowed. Only one is escape.');
 
     this.addFog(0x1a0f20, 0.2);
     this.addDust(0x8a6a9a);

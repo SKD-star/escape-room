@@ -30,11 +30,25 @@ export class AudioEngine {
     bus.on('settings:changed', ({ name }) => {
       if (name.endsWith('Volume') || name === 'audioMuted') this.applyVolumes();
     });
+
+    // Auto-start audio and BGM on any initial user gesture
+    const enableAudio = () => {
+      this.start();
+      document.removeEventListener('click', enableAudio);
+      document.removeEventListener('keydown', enableAudio);
+      document.removeEventListener('pointerdown', enableAudio);
+    };
+    document.addEventListener('click', enableAudio);
+    document.addEventListener('keydown', enableAudio);
+    document.addEventListener('pointerdown', enableAudio);
   }
 
   /** Must be called from a user gesture. */
   start() {
-    if (this.started) return;
+    if (this.started) {
+      if (this.bgmAudio?.paused) this.bgmAudio.play().catch(() => {});
+      return;
+    }
     this.started = true;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -260,9 +274,16 @@ export class AudioEngine {
    * Routes through WebAudio music gain bus with loop and volume controls.
    */
   startBGM() {
-    if (this.bgmAudio) return;
+    if (this.bgmAudio) {
+      if (this.bgmAudio.paused) {
+        this.bgmAudio.play().catch((err) => {
+          console.warn('[AudioEngine] BGM resume waiting for gesture:', err);
+        });
+      }
+      return;
+    }
 
-    const audio = new Audio('/bgm.mp4');
+    const audio = new Audio('/soundtrack.mp4');
     audio.loop = true;
     audio.crossOrigin = 'anonymous';
 
@@ -315,24 +336,7 @@ export class AudioEngine {
    * the presence's proximity. Created lazily, reused across rooms.
    */
   setTension(level) {
-    if (!this.ctx) return;
-    if (!this.tensionGain) {
-      this.tensionGain = this.ctx.createGain();
-      this.tensionGain.gain.value = 0;
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 700;
-      filter.connect(this.tensionGain).connect(this.buses.music);
-      for (const f of [110, 155.5, 156.6]) { // root + detuned tritone pair
-        const osc = this.ctx.createOscillator();
-        osc.type = 'sawtooth';
-        osc.frequency.value = f;
-        osc.connect(filter);
-        osc.start();
-      }
-    }
-    const target = Math.min(0.06, level * 0.06);
-    this.tensionGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.6);
+    // Disabled: Only soundtrack.mp4 plays in background per design
   }
 
   stopAmbience() {
@@ -344,72 +348,10 @@ export class AudioEngine {
   }
 
   /**
-   * Layered ambience per room theme:
-   *  - low drone (two detuned oscillators through lowpass)
-   *  - wind (filtered noise with slow LFO on filter freq)
-   *  - occasional heartbeat under high-tension themes
+   * Only soundtrack.mp4 plays in background — procedural synth drones disabled.
    */
   setAmbience(theme) {
     if (!this.ctx) return;
     this.stopAmbience();
-
-    const themes = {
-      library:  { drone: 55,  wind: 500,  tension: 0.2 },
-      temple:   { drone: 49,  wind: 380,  tension: 0.3 },
-      prison:   { drone: 41,  wind: 620,  tension: 0.45 },
-      laboratory:{ drone: 62, wind: 900,  tension: 0.4 },
-      hospital: { drone: 44,  wind: 700,  tension: 0.55 },
-      mansion:  { drone: 52,  wind: 420,  tension: 0.4 },
-      castle:   { drone: 46,  wind: 340,  tension: 0.35 },
-      bunker:   { drone: 38,  wind: 1100, tension: 0.6 },
-      cyber:    { drone: 70,  wind: 1600, tension: 0.5 },
-      boss:     { drone: 33,  wind: 260,  tension: 0.85 },
-    };
-    const cfg = themes[theme] ?? themes.library;
-
-    // drone
-    for (const detune of [0, 3.2]) {
-      const osc = this.ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.value = cfg.drone + detune;
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 160;
-      const gain = this.ctx.createGain();
-      gain.gain.value = 0.0001;
-      gain.gain.exponentialRampToValueAtTime(0.05, this.ctx.currentTime + 4);
-      osc.connect(filter).connect(gain).connect(this.buses.music);
-      osc.start();
-      this.ambienceNodes.push(osc, gain);
-    }
-
-    // wind
-    const wind = this.ctx.createBufferSource();
-    wind.buffer = this.noiseBuffer(4);
-    wind.loop = true;
-    const windFilter = this.ctx.createBiquadFilter();
-    windFilter.type = 'bandpass';
-    windFilter.frequency.value = cfg.wind;
-    windFilter.Q.value = 0.5;
-    const windGain = this.ctx.createGain();
-    windGain.gain.value = 0.0001;
-    windGain.gain.exponentialRampToValueAtTime(0.03, this.ctx.currentTime + 6);
-    // LFO modulating the wind filter
-    const lfo = this.ctx.createOscillator();
-    lfo.frequency.value = 0.07;
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.value = cfg.wind * 0.4;
-    lfo.connect(lfoGain).connect(windFilter.frequency);
-    lfo.start();
-    wind.connect(windFilter).connect(windGain).connect(this.buses.music);
-    wind.start();
-    this.ambienceNodes.push(wind, lfo, windGain);
-
-    // heartbeat under tension
-    if (cfg.tension > 0.5) {
-      this.heartbeatTimer = setInterval(() => {
-        this.play('heartbeat', cfg.tension * 0.7);
-      }, 1400 - cfg.tension * 500);
-    }
   }
 }

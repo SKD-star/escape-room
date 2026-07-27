@@ -1,33 +1,45 @@
 @echo off
 REM ============================================================
-REM  AI Powered Escape Room - one-click launcher
-REM  Double-click this file to start EVERYTHING:
-REM    - Game        -> http://localhost:3000
-REM    - Admin panel -> http://localhost:5000/admin/  (admin / Admin1234)
-REM  Leave the black server window OPEN while you play.
-REM  To stop: close that black window.
+REM  AI Powered Escape Room — 1-Click Dual Server Launcher
+REM  Double-click to start Game + Admin Panel.
 REM ============================================================
 cd /d "%~dp0"
-title AI Escape Room - launcher
+title AI Escape Room Launcher
 
 echo.
-echo   Starting the game + admin server...
-echo   (a second window will open - leave it running)
+echo  ============================================================
+echo    🗝️  AI POWERED ESCAPE ROOM — STARTING SERVERS...
+echo  ============================================================
 echo.
 
-REM Launch both servers (Flask backend on :5000 + game on :3000) in their own window
-start "AI Escape Room - SERVERS (keep open)" cmd /k "npm start"
+if not exist node_modules (
+    echo   Installing Node.js dependencies...
+    call npm install
+    echo.
+)
 
-REM Give the servers a few seconds to boot, then open the pages
-timeout /t 9 /nobreak >nul
+REM 1. Start Python Flask Backend Server (Port 5000)
+start "AI Escape Room - Python Backend (:5000)" cmd /k "python server/app.py"
+
+REM 2. Start Vite 3D Game Server (Port 3000)
+start "AI Escape Room - Vite Game Server (:3000)" cmd /k "npm run dev"
+
+REM 3. Wait 4 seconds for both servers to be fully ready
+echo   Booting servers... please wait...
+timeout /t 4 /nobreak >nul
+
+REM 4. Open browser tabs AFTER servers are listening
 start "" http://localhost:3000
 start "" http://localhost:5000/admin/
 
 echo.
-echo   Done! Two browser tabs should have opened:
-echo     - The game:  http://localhost:3000
-echo     - Admin:     http://localhost:5000/admin/   (login: admin / Admin1234)
+echo   ============================================================
+echo    SUCCESS! Two browser tabs opened:
+echo     - 🎮 3D Game:      http://localhost:3000
+echo     - ⚙️ Admin Panel:  http://localhost:5000/admin/   (admin / Admin1234)
+echo   ============================================================
 echo.
-echo   You can close THIS window. Keep the "SERVERS" window open while playing.
+echo   Keep the server command windows open while playing.
+echo   Press any key to close this launcher window.
 echo.
 pause
