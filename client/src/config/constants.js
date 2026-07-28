@@ -19,20 +19,20 @@ export const GAME_VERSION = '1.0.0';
  */
 export const DIFFICULTY_MODES = {
   story: {
-    label: 'Story',
-    blurb: 'For the puzzles and the lore. The presence stays dormant, sanity is gentle, batteries last. No clock.',
+    label: 'Story Mode',
+    blurb: 'Relaxed story experience. Unlimited puzzle attempts with no countdown timer.',
     sanityDrain: 0.4, hauntRate: 0,   batteryDrain: 0.5, puzzleBias: -0.15, scoreMult: 0.75,
     countdown: null,
   },
   normal: {
-    label: 'Normal',
-    blurb: 'The intended experience. The dark is patient, but it is not idle. A generous room clock keeps you moving.',
+    label: 'Medium Mode',
+    blurb: 'The standard escape challenge. You have 3 attempts total per run.',
     sanityDrain: 1,   hauntRate: 1,   batteryDrain: 1,   puzzleBias: 0,     scoreMult: 1,
-    countdown: { mult: 1.5, harsh: false, overtimeDrain: 1 },
+    countdown: null,
   },
   nightmare: {
-    label: 'Nightmare',
-    blurb: 'It manifests often, the beam gutters fast, and your grip slips quickly. The room clock is a hard deadline — run it out and the room restarts. Full score bonus.',
+    label: 'Difficult Mode',
+    blurb: 'High tension. 3 attempts limit combined with an active room countdown timer.',
     sanityDrain: 1.6, hauntRate: 1.8, batteryDrain: 1.7, puzzleBias: 0.2,   scoreMult: 1.5,
     countdown: { mult: 0.85, harsh: true, overtimeDrain: 3, failOnTimeout: true },
   },

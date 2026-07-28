@@ -52,68 +52,160 @@ export class NoteReader {
 export class DialogueBox {
   constructor(onClose) {
     this.onClose = onClose;
-    this.npc = 'The Warden';
+    this.npc = 'The Librarian';
     this.theme = 'library';
     this.history = [];
+    this.isThinking = false;
+
     this.el = html`
-      <div id="dialogue-screen">
-        <div class="dialogue-box glass">
-          <div class="npc-name"></div>
-          <p class="line"></p>
-          <div class="dialogue-input">
-            <input placeholder="Speak to the spirit…" maxlength="200" aria-label="Your message" />
-            <button class="btn btn-primary" data-action="send">Speak</button>
-            <button class="btn" data-action="leave">Leave</button>
+      <div id="dialogue-screen" class="backdrop">
+        <div class="dialogue-box glass" style="max-width:620px;width:92%;max-height:85vh;display:flex;flex-direction:column;padding:20px;gap:14px;border-radius:14px">
+          <!-- Chatbot Header -->
+          <div class="dialogue-header" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-ghost);padding-bottom:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="font-size:1.6rem;background:rgba(212,175,55,0.15);width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent)">👻</div>
+              <div>
+                <div class="npc-name" style="font-family:var(--font-display);font-size:1.25rem;color:var(--fg-primary)">The Librarian</div>
+                <div style="font-size:0.75rem;color:var(--accent);letter-spacing:0.05em">Interactive Room AI Assistant</div>
+              </div>
+            </div>
+            <button class="btn btn-icon" data-action="leave" title="Close Dialogue" style="padding:6px 12px;font-size:0.85rem">✕ Leave</button>
+          </div>
+
+          <!-- Chat Log Container -->
+          <div class="dialogue-log" style="flex:1;overflow-y:auto;min-height:220px;max-height:360px;display:flex;flex-direction:column;gap:12px;padding:8px 4px"></div>
+
+          <!-- Quick Suggestion Chips -->
+          <div class="dialogue-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0">
+            <button class="chip-btn" data-suggest="What is written in the scroll?">📜 Scroll clue</button>
+            <button class="chip-btn" data-suggest="How do I unlock the exit door?">🔐 Exit lock</button>
+            <button class="chip-btn" data-suggest="Where is the key hidden?">🔑 Hidden key</button>
+          </div>
+
+          <!-- Input Area -->
+          <div class="dialogue-input" style="display:flex;gap:10px;align-items:center">
+            <input placeholder="Ask the librarian about this room..." maxlength="200" aria-label="Your message to the librarian" style="flex:1;padding:12px 16px;border-radius:8px;background:rgba(0,0,0,0.4);border:1px solid var(--border-ghost);color:#fff;font-family:inherit" />
+            <button class="btn btn-primary" data-action="send" style="padding:12px 20px">Ask</button>
           </div>
         </div>
       </div>`;
-    this.line = this.el.querySelector('.line');
+
+    this.logEl = this.el.querySelector('.dialogue-log');
     this.input = this.el.querySelector('input');
+
     this.el.querySelector('[data-action="send"]').addEventListener('click', () => this.send());
     this.el.querySelector('[data-action="leave"]').addEventListener('click', () => this.close());
+
+    this.el.querySelectorAll('.chip-btn').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const text = chip.dataset.suggest;
+        if (text && !this.isThinking) {
+          this.input.value = text;
+          this.send();
+        }
+      });
+    });
+
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') this.send();
       if (e.key === 'Escape') this.close();
     });
+
     screens.register('dialogue', this.el);
     bus.on(Events.DIALOGUE_OPEN, (payload) => this.open(payload));
   }
 
   open({ npc, theme, greeting }) {
-    this.npc = npc;
-    this.theme = theme;
+    this.npc = npc || 'The Librarian';
+    this.theme = theme || 'library';
     this.history = [];
-    this.el.querySelector('.npc-name').textContent = npc;
+    this.isThinking = false;
+    this.logEl.innerHTML = '';
+
+    this.el.querySelector('.npc-name').textContent = this.npc;
     screens.show('dialogue');
-    this.typewrite(greeting ?? 'You dare to speak with the dead…');
+
+    const initialGreeting = greeting || 'Shhh. Ask what you will about this room — quietly.';
+    this.appendMessage('assistant', initialGreeting);
     setTimeout(() => this.input.focus(), 100);
+  }
+
+  appendMessage(role, text) {
+    const isUser = role === 'user';
+    const msgEl = html`
+      <div class="chat-msg ${isUser ? 'chat-user' : 'chat-npc'}"
+           style="display:flex;flex-direction:column;align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:82%;background:${isUser ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.06)'};border:1px solid ${isUser ? 'var(--accent)' : 'var(--border-ghost)'};padding:10px 14px;border-radius:${isUser ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}">
+        <div style="font-size:0.7rem;color:var(--fg-muted);margin-bottom:4px;font-weight:600">${isUser ? 'You' : this.npc}</div>
+        <div class="msg-text" style="font-size:0.92rem;line-height:1.5;color:var(--fg-primary)"></div>
+      </div>`;
+
+    const textEl = msgEl.querySelector('.msg-text');
+    this.logEl.appendChild(msgEl);
+    this.scrollToBottom();
+
+    if (isUser) {
+      textEl.textContent = text;
+    } else {
+      this.typewrite(textEl, text);
+    }
+  }
+
+  scrollToBottom() {
+    this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
   async send() {
     const message = this.input.value.trim();
-    if (!message) return;
+    if (!message || this.isThinking) return;
+
     this.input.value = '';
+    this.isThinking = true;
+
+    // Display user message in chat stream
+    this.appendMessage('user', message);
     this.history.push({ role: 'user', content: message });
-    this.typewrite('…');
+
+    // Show thinking indicator
+    const thinkingEl = html`
+      <div class="chat-msg chat-npc thinking-msg" style="align-self:flex-start;background:rgba(255,255,255,0.06);border:1px solid var(--border-ghost);padding:10px 14px;border-radius:14px 14px 14px 2px">
+        <div style="font-size:0.7rem;color:var(--fg-muted);margin-bottom:4px">${this.npc}</div>
+        <div style="font-size:0.9rem;color:var(--accent);font-style:italic">Consulting room archives…</div>
+      </div>`;
+    this.logEl.appendChild(thinkingEl);
+    this.scrollToBottom();
+
     const res = await api.aiDialogue({
       npc: this.npc, theme: this.theme, message, history: this.history,
     });
-    const line = res.ok ? res.data.line : 'The spirit fades — its voice cannot reach you now.';
+
+    thinkingEl.remove();
+    this.isThinking = false;
+
+    const line = res.ok && res.data?.line
+      ? res.data.line
+      : 'The room whispers back: Observe the items and notes around you for your answer.';
+
     this.history.push({ role: 'assistant', content: line });
-    this.typewrite(line);
+    this.appendMessage('assistant', line);
+
     bus.emit(Events.PLAY_SOUND, { name: 'whisper' });
     bus.emit('dialogue:exchanged');
   }
 
-  typewrite(text) {
-    gsap.killTweensOf(this.line);
-    this.line.textContent = '';
+  typewrite(targetEl, text) {
+    gsap.killTweensOf(targetEl);
+    targetEl.textContent = '';
     const chars = [...text];
     const obj = { i: 0 };
     gsap.to(obj, {
-      i: chars.length, duration: Math.min(2.4, chars.length * 0.03), ease: 'none',
-      onUpdate: () => { this.line.textContent = chars.slice(0, Math.floor(obj.i)).join(''); },
+      i: chars.length,
+      duration: Math.min(2.0, chars.length * 0.025),
+      ease: 'none',
+      onUpdate: () => {
+        targetEl.textContent = chars.slice(0, Math.floor(obj.i)).join('');
+        this.scrollToBottom();
+      },
     });
   }
 

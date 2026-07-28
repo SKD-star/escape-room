@@ -230,8 +230,11 @@ export class HUD {
     bus.on(Events.TOAST, ({ text, type = 'info', duration = 3200 }) =>
       this.toast(text, type, duration));
 
-    bus.on(Events.ACHIEVEMENT, ({ title }) =>
-      this.toast(`Achievement unlocked — ${title}`, 'achievement', 4200));
+    bus.on('room:cleared:banner', ({ name }) =>
+      this.showRoomClearedBanner(name));
+
+    bus.on(Events.ACHIEVEMENT, ({ title, description }) =>
+      this.showAchievementBanner({ title, description }));
 
     bus.on('player:stamina', ({ ratio, active }) => {
       this.stamina.classList.toggle('visible', active || ratio < 0.999);
@@ -340,5 +343,41 @@ export class HUD {
     setTimeout(() => {
       gsap.to(toast, { opacity: 0, y: -10, duration: 0.4, onComplete: () => toast.remove() });
     }, duration);
+  }
+
+  showRoomClearedBanner(name) {
+    bus.emit(Events.PLAY_SOUND, { name: 'unlock' });
+
+    const banner = html`
+      <div class="room-cleared-banner-popup" style="position:fixed;top:18%;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:6px;background:linear-gradient(135deg, rgba(14, 38, 22, 0.96), rgba(8, 20, 12, 0.98));border:1px solid #37d4a0;box-shadow:0 0 35px rgba(55,212,160,0.5), 0 8px 32px rgba(0,0,0,0.9);padding:18px 38px;border-radius:14px;pointer-events:none;text-align:center">
+        <div style="font-size:0.75rem;color:#37d4a0;letter-spacing:0.2em;font-weight:700;text-transform:uppercase">✓ ROOM ESCAPED & CLEARED</div>
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:#ffffff;letter-spacing:0.08em">${escapeHtml(name)}</div>
+      </div>`;
+
+    document.body.appendChild(banner);
+
+    gsap.timeline()
+      .fromTo(banner, { opacity: 0, scale: 0.85, y: -20 }, { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: 'back.out(1.4)' })
+      .to(banner, { opacity: 0, scale: 0.9, y: -20, duration: 0.5, ease: 'power2.in', onComplete: () => banner.remove() }, '+=3.5');
+  }
+
+  showAchievementBanner({ title, description }) {
+    bus.emit(Events.PLAY_SOUND, { name: 'unlock' });
+
+    const banner = html`
+      <div class="achievement-banner-popup" style="position:fixed;top:28px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg, rgba(38, 30, 14, 0.96), rgba(16, 14, 8, 0.98));border:1px solid var(--accent);box-shadow:0 0 28px rgba(212,175,55,0.45), 0 8px 32px rgba(0,0,0,0.85);padding:14px 26px;border-radius:12px;min-width:330px;max-width:460px;pointer-events:none">
+        <div style="font-size:2.2rem;background:rgba(212,175,55,0.18);width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent);box-shadow:0 0 12px rgba(212,175,55,0.3)">🏆</div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:0.7rem;color:var(--accent);letter-spacing:0.16em;font-weight:700;text-transform:uppercase">🏆 Achievement Unlocked</div>
+          <div style="font-family:var(--font-display);font-size:1.12rem;color:#ffffff;letter-spacing:0.04em">${escapeHtml(title || 'Achievement Unlocked')}</div>
+          <div style="font-size:0.82rem;color:var(--fg-secondary)">${escapeHtml(description || 'Feat accomplished across all runs')}</div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(banner);
+
+    gsap.timeline()
+      .fromTo(banner, { opacity: 0, y: -45, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'back.out(1.4)' })
+      .to(banner, { opacity: 0, y: -30, scale: 0.95, duration: 0.5, ease: 'power2.in', onComplete: () => banner.remove() }, '+=4.2');
   }
 }

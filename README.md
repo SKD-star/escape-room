@@ -1,8 +1,8 @@
 # 🗝️ AI-Powered 3D Escape Room with Dynamic Puzzle Generation
 
-A state-of-the-art, browser-based 3D horror escape room game featuring **AI-generated dynamic puzzles**, **adaptive player-skill difficulty**, **free-text spectral NPC dialogues**, **3D articulated dual-hand object interactions & throwing physics**, and **ten immersive haunted environments** — built with Three.js, Rapier Physics, GSAP, Python Flask, and the OpenAI API.
+A state-of-the-art, browser-based 3D horror escape room game featuring **AI-generated dynamic puzzles**, **sequential level progression & mode unlocks**, **interactive AI NPC Chatbot**, **3D articulated dual-hand object interactions & throwing physics**, and **ten immersive haunted environments** — built with Three.js, Rapier Physics, GSAP, Python Flask, and the OpenAI API.
 
-> **Academic Project Synopsis — Final Year B.Sc. Artificial Intelligence & Machine Learning**
+> **Academic Project Synopsis — Final Year B.Sc. Artificial Intelligence & Machine Learning**  
 > **Academic Year**: 2026–2027  
 > **Institution**: Thakur College of Science and Commerce, Kandivali  
 > **Department**: Artificial Intelligence and Machine Learning  
@@ -16,10 +16,11 @@ A state-of-the-art, browser-based 3D horror escape room game featuring **AI-gene
 | Feature | Description |
 |---|---|
 | 🎮 **10 Unique 3D Rooms** | *Haunted Library → Ancient Temple → Forgotten Prison → Abandoned Laboratory → Abandoned Hospital → Haunted Mansion → Medieval Castle → Secret Bunker → Cyber AI Facility → Final Convergence* |
-| 🤖 **AI-Driven Puzzles** | OpenAI GPT-4o / GPT-3.5-Turbo generated Keypad Locks, Riddles, and Symbol Sequences with clues dynamically tied to room 3D physical props. |
-| 📈 **Adaptive Skill Engine** | Server-side Exponential Moving Average (EMA) player rating dynamically scales puzzle complexity based on solve speeds, hint usage, and attempts lost. |
+| 🔒 **Sequential Mode Unlocks** | Strict progression hierarchy: **Story Mode** $\rightarrow$ **Medium Mode** (locked until Story mode is fully completed) $\rightarrow$ **Difficult Mode** (locked until Medium mode is completed). Persistent across browser sessions. |
+| 🤖 **AI-Driven Puzzles** | OpenAI GPT-4o / GPT-3.5-Turbo generated Keypad Locks, Riddles, and Symbol Sequences with atmospheric clues dynamically tied to room 3D physical props. |
+| 💬 **Interactive AI Chatbot NPC** | Chat freely with room NPCs (*The Librarian*, *The Keeper*, *Prisoner 47*) in natural language using an in-game chatbot UI with scroll history and suggestion chips. |
+| 🏆 **Level Cleared & Achievement Popups** | Instant AAA-style pop-up notifications (`✓ ROOM ESCAPED & CLEARED` and `🏆 ACHIEVEMENT UNLOCKED`) with trophies, descriptions, and audio cues upon clearing levels. |
 | 🥊 **3D Dual-Hand & Throw Rig** | Articulated gloved hands with jointed finger flexing, 2nd-order spring-damped inertia sway, physical object pick-up, and explosive velocity throwing. |
-| 👻 **Spectral NPC AI Dialogue** | Talk freely in natural language with ghost spirits (*The Librarian*, *The Warden*, *The Cyber AI*) using prompt-engineered GPT dialogue models. |
 | 🕯️ **Survival Mechanics** | Flashlight battery management, dynamic sanity erosion with post-processing distortion, quickening heartbeats, and a hunting spectral presence. |
 | ⚡ **Offline Fallback Engine** | Runs 100% offline with zero dependencies via a local procedural AI puzzle generator if no internet or API keys are detected. |
 
@@ -28,13 +29,19 @@ A state-of-the-art, browser-based 3D horror escape room game featuring **AI-gene
 ## 🎯 Game Modes
 
 1. 📖 **Story Mode**:
-   - Unlimited puzzle attempts. No room countdown clock. Designed for story exploration and lore discovery.
-2. ⚖️ **Normal Mode (The Standard Challenge)**:
+   - Relaxed exploration experience.
+   - Unlimited puzzle attempts with no countdown timer.
+   - Unlocked by default for new players.
+
+2. ⚖️ **Medium Mode (The Standard Challenge)**:
+   - **🔒 Locked** until the full Story Mode campaign is completed.
    - **3-Attempt Limit per Run** (`ATTEMPTS: ☽ ☽ ☽`).
-   - Entering 3 wrong keypad codes deducts all pips ($\rightarrow$ `☠ ☠ ☠`), triggering an automatic **GAME OVER** screen and restarting the run fresh from Room 1.
-3. 💀 **Nightmare Mode (The Hardcore Descent)**:
+   - 3 wrong keypad entries deduct all pips ($\rightarrow$ `☠ ☠ ☠`), triggering an automatic **GAME OVER** screen and restarting the run.
+
+3. 💀 **Difficult Mode (The Hardcore Descent)**:
+   - **🔒 Locked** until Medium Mode is fully completed.
    - **3-Attempt Limit** + **Live Per-Room Countdown Timer** (`⏱️ 3:30`).
-   - The clock ticks down live on room entry. If the timer reaches `0:00` OR 3 wrong codes are entered, it triggers automatic **GAME OVER** and restarts from Room 1.
+   - Clock ticks live on room entry. Timer reaching `0:00` OR entering 3 wrong codes triggers **GAME OVER** and restarts from Room 1.
 
 ---
 
@@ -82,6 +89,7 @@ game/
 │       │   ├── FPSController.js          (WASD movement & mouse look)
 │       │   ├── FirstPersonHands.js       (3D gloved hand rig & throw physics)
 │       │   ├── InteractionSystem.js      (Raycasting & object pick-up)
+│       │   ├── ProgressionManager.js     (Persistent mode unlock & sequential rooms)
 │       │   ├── AttemptsTracker.js        (3-attempt limit & Game Over logic)
 │       │   └── LevelTimer.js             (Nightmare mode live countdown clock)
 │       ├── world/
@@ -93,45 +101,38 @@ game/
 │       │   └── materials/MaterialLibrary.js (PBR materials & shaders)
 │       ├── puzzles/PuzzleManager.js      (Keypad, Riddle, Sequence puzzle UI)
 │       └── ui/
-│           ├── screens/HUD.js            (In-game overlay, crosshair, countdown)
-│           ├── screens/GameOverlays.js   (Game Over screen & AI Dialogue)
+│           ├── screens/HUD.js            (In-game overlay, achievement & level banners)
+│           ├── screens/GameOverlays.js   (Game Over screen & AI Chatbot dialogue)
+│           ├── screens/DifficultyScreen.js (Mode picker with lock indicators)
 │           └── styles/main.css           (Modern dark CSS design system)
 │
-└── server/                               (Backend Python Flask API)
-    ├── app.py                            (Flask entry point)
-    ├── routes/ai.py                      (AI puzzle & dialogue endpoints)
-    ├── routes/game.py                    (Leaderboards & saves endpoints)
-    └── services/
-        ├── openai_service.py             (GPT API integration)
-        └── difficulty_service.py         (Adaptive EMA skill calculator)
+├── server/                               (Backend Python Flask API)
+│   ├── app.py                            (Flask entry point)
+│   ├── routes/ai.py                      (AI puzzle & dialogue endpoints)
+│   ├── routes/game.py                    (Leaderboards & saves endpoints)
+│   └── services/
+│       ├── openai_service.py             (GPT API integration)
+│       └── difficulty_service.py         (Adaptive EMA skill calculator)
+│
+└── DEPLOY.md                             (Complete Deployment Guide)
 ```
 
 ---
 
-## 🚀 How to Run Locally
+## 🚀 How to Run & Deploy
 
-### 1. Frontend Web Client
+For detailed deployment instructions across Local, Netlify, Vercel, Render, and Docker environments, see **[DEPLOY.md](file:///c:/Users/admin/Desktop/game/DEPLOY.md)**.
+
+### Quick Start:
 ```bash
-# Install dependencies
+# Install frontend dependencies
 npm install
 
-# Run Vite dev server
+# Run local development server
 npm run dev
 
 # Build production bundle
 npm run build
-```
-
-### 2. Backend Flask Server (Optional for AI Cloud Integration)
-```bash
-# Navigate to server
-cd server
-
-# Set OpenAI API Key (Optional)
-set OPENAI_API_KEY="your-api-key-here"
-
-# Run Flask server
-python app.py
 ```
 
 ---

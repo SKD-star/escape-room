@@ -192,12 +192,24 @@ def _fallback_puzzle(theme: str, difficulty: float) -> dict:
     length = 4 + int(difficulty * 4)  # 4..8 steps
     symbols = ["moon", "eye", "serpent", "key", "skull", "flame", "hourglass", "raven"]
     seq = random.sample(symbols, min(length, len(symbols)))
+    symbol_descriptions = {
+        "moon": "the pale celestial orb of midnight",
+        "eye": "the all-seeing optical core",
+        "serpent": "the slithering creature beneath grass",
+        "key": "the golden key of the realm",
+        "skull": "the silent marker of mortality",
+        "flame": "the sacred flickering fire",
+        "hourglass": "the falling sands of time",
+        "raven": "the dark wings of night",
+    }
+    riddles = [f"I. {symbol_descriptions.get(s, s)}" for s in seq]
+    clue_text = "The Ritual Order:\n" + "\n".join(riddles)
     return {
         "type": "sequence",
         "title": "The Order of Things",
         "narrative": "Ancient symbols glow faintly. They pulsed in an order once — restore it.",
         "sequence": seq,
-        "clue": f"The {seq[0]} always comes first. Follow the fading glow.",
+        "clue": clue_text,
         "difficulty": difficulty,
     }
 
@@ -219,6 +231,7 @@ def generate_puzzle(theme: str, difficulty: float, user_id: int | None = None,
             "for keypad: code (string of digits) + clue; "
             "for riddle: riddle + answer (single lowercase word); "
             "for sequence: sequence (array of 4-8 symbol words) + clue. "
+            "STRICT PUZZLE DESIGN RULE: In the 'clue' field, NEVER write out explicit passcode digits (e.g., 'code is 1-4-6-2') or list raw symbol answer sequence names directly (e.g., 'serpent, moon, eye'). Instead, write atmospheric riddle verses, poetic descriptions, or observation tasks (e.g., 'I. The slithering creature, II. The pale orb'). "
             "Keep it solvable and creepy. No gore against real persons."
         )
         user = (
@@ -258,36 +271,61 @@ def generate_hint(puzzle: dict, tier: int, user_id: int | None = None) -> dict:
 def generate_dialogue(npc: str, room_theme: str, player_message: str,
                       history: list[dict] | None = None,
                       user_id: int | None = None) -> dict:
-    npc = (npc or "The Warden")[:48]
+    npc = (npc or "The Librarian")[:48]
+    room_theme = (room_theme or "library")[:32]
+    clean_msg = (player_message or "").strip()
 
     def via_openai() -> dict:
         system = (
-            f"You are '{npc}', a mysterious spectral NPC inside a {room_theme} in a "
-            "horror escape-room game. Speak in short, atmospheric sentences (max 3). "
-            "You may drop subtle puzzle guidance but never full answers. "
-            "Return JSON {\"line\": str, \"mood\": one of calm|ominous|angry|helpful}."
+            f"You are '{npc}', the ghostly room guide and librarian inside the {room_theme} of a horror escape-room game. "
+            "You function as an interactive room chatbot. "
+            "CRITICAL INSTRUCTIONS:\n"
+            "1. Answer ONLY questions related to this specific room, its environment, items, books, notes, puzzle clues, and lore.\n"
+            "2. Never use pre-defined or generic canned lines. Address the player's specific question directly with dynamic context.\n"
+            "3. Provide subtle puzzle guidance or atmospheric hints when asked, but do not give away explicit passcode numbers directly unless asked.\n"
+            "4. If the player asks about topics unrelated to the room, stay in character and remind them that only the room's secrets matter.\n"
+            "5. Keep responses concise, mysterious, and helpful (max 3 sentences).\n"
+            "Return JSON {\"line\": str, \"mood\": calm|ominous|helpful}."
         )
         messages = [{"role": "system", "content": system}]
         for h in (history or [])[-6:]:
             messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:400]})
-        messages.append({"role": "user", "content": player_message[:400]})
+        messages.append({"role": "user", "content": clean_msg[:400]})
         resp = _openai().chat.completions.create(
             model=current_app.config["OPENAI_MODEL"],
             response_format={"type": "json_object"},
-            max_tokens=150, temperature=1.0, messages=messages,
+            max_tokens=180, temperature=0.9, messages=messages,
         )
         return json.loads(resp.choices[0].message.content)
 
     def fallback() -> dict:
-        lines = [
-            ("You are not the first to ask. The others stopped asking.", "ominous"),
-            ("The walls remember every soul that touched them. Touch carefully.", "calm"),
-            ("Look where the light refuses to go.", "helpful"),
-            ("Time moves differently here. Yours is running out faster.", "ominous"),
-            ("I could tell you the answer. But then you'd owe me something.", "ominous"),
-            ("The puzzle is not the lock. The puzzle is you.", "calm"),
-        ]
-        line, mood = random.choice(lines)
+        msg = clean_msg.lower()
+
+        # Dynamic room context response synthesis for offline / fallback
+        if any(w in msg for w in ["book", "scroll", "read", "text", "library", "shelf", "spine", "paper"]):
+            line = f"The books in this {room_theme.replace('_', ' ')} remember what was forgotten. Inspect the bookshelves carefully — an ancient scroll rests in the Whisper Section."
+            mood = "helpful"
+        elif any(w in msg for w in ["code", "number", "keypad", "lock", "password", "lectern", "combination", "digits"]):
+            line = "To decipher the lock code, count the physical relics in this chamber: the lecterns, ancestral paintings, lit candles, and stone pillars in order."
+            mood = "helpful"
+        elif any(w in msg for w in ["key", "door", "exit", "escape", "open", "lever", "alcove"]):
+            line = "The brass exit key is hidden behind a secret wall. Search the North wall for a hidden lever between the shelves."
+            mood = "helpful"
+        elif any(w in msg for w in ["who", "librarian", "you", "ghost", "spirit", "name", "identity"]):
+            line = f"I am the Librarian of these forgotten halls. I stay behind to test those who enter the {room_theme.replace('_', ' ')}."
+            mood = "calm"
+        elif any(w in msg for w in ["time", "dark", "sanity", "light", "flashlight", "timer", "presence", "haunt"]):
+            line = "Keep your flashlight burning when exploring the dark. Light restores your clarity, but staying in shadow erodes your mind."
+            mood = "ominous"
+        elif any(w in msg for w in ["hint", "help", "solve", "stuck", "clue", "where"]):
+            line = f"Look around the {room_theme.replace('_', ' ')}. Every candle, painting, and note was placed to give you a piece of the truth."
+            mood = "helpful"
+        else:
+            # Contextually synthesize response addressing player's specific question
+            topic = clean_msg[:40] if len(clean_msg) > 0 else "the room"
+            line = f"Regarding '{topic}' — seek the answer within the {room_theme.replace('_', ' ')}. Inspect the room's objects and notes carefully."
+            mood = "calm"
+
         return {"line": line, "mood": mood}
 
     return _run("dialogue", f"npc:{npc}", via_openai, fallback, user_id)

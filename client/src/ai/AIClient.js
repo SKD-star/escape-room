@@ -226,4 +226,11 @@ export const aiClient = {
       text: 'The door seals behind you. The air here is older, and it notices you breathing it.',
     };
   },
+
+  /** @returns {Promise<string>} dialogue line */
+  async getDialogue(npc, theme, message, history) {
+    const res = await api.aiDialogue({ npc, theme, message, history });
+    if (res.ok && res.data?.line) return res.data.line;
+    return `Observe the items and notes in this room carefully.`;
+  },
 };

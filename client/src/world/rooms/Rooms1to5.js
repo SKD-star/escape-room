@@ -51,7 +51,7 @@ export class HauntedLibrary extends BaseRoom {
     this.addCandle(0.55, 0.83, -0.2);
     this.placeNote(0, 0.84, 0.1,
       'The Librarian\'s Last Entry',
-      'They say every book in this room is a door,\nand every door is a test.\n\nAn ancient scroll is hidden inside the third bookshelf in the Whisper Section (North-West wall).\nFollow the glowing golden beacon to find the scroll.\n\nIf you are reading this, I am still here.\nI am always still here.');
+      'They say every book in this room is a door, and every door is a test.\n\nTo unlock the exit lectern mechanism, inspect and count the physical relic groups in order from the center table to the exit door:\nI. Reading Lecterns in the center\nII. Ancestral Wall Paintings in the gallery\nIII. Lit Candles placed around the room\nIV. Stone Pillars framing the exit door\n\n📜 Inscription Clue:\n"[CLUE]"\n\nAn ancient scroll is tucked inside the 3rd bookshelf in the Whisper Section (marked by the golden beacon) if you need the full cipher.');
 
     // Golden spotlight over the 3rd Bookshelf in the Whisper Section (-2.9, -5.6)
     const shelfLight = new THREE.PointLight(0xffc857, 2.0, 6, 2);
@@ -61,7 +61,7 @@ export class HauntedLibrary extends BaseRoom {
     // Ancient Scroll on the third bookshelf in the Whisper Section (-2.9, 1.25, -4.8)
     this.placeScroll(-2.9, 1.25, -4.8,
       'The Hidden Scroll — Whisper Section Inscription',
-      'Unrolling the ancient parchment tucked inside the third bookshelf:\n\n"[CLUE]"\n\nKeep these physical counts in mind when examining the lectern.');
+      'Unrolling the ancient parchment tucked inside the third bookshelf:\n\n"[CLUE]"\n\nCount each physical relic group in order from center to exit door to reveal the four-digit lock code.');
 
     // Candelabra ring
     this.addCandle(-4, 0.02, -3);

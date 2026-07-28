@@ -28,10 +28,26 @@ import { api } from './net/ApiClient.js';
 import { aiClient } from './ai/AIClient.js';
 import { settings } from './config/settings.js';
 import { difficulty } from './config/difficulty.js';
+import { progression } from './player/ProgressionManager.js';
 import { campaign } from './config/campaign.js';
 import { ROOMS } from './config/constants.js';
 import { screens } from './ui/ScreenManager.js';
 import { lifetimeStats } from './ui/screens/StatsScreen.js';
+
+export const ACHIEVEMENT_INFO = {
+  first_escape: { title: 'First Steps', desc: 'Escaped your first room' },
+  half_way: { title: 'Halfway to Freedom', desc: 'Cleared 5 rooms' },
+  survivor: { title: 'Survivor', desc: 'Escaped all 10 rooms' },
+  no_hints: { title: 'Purist', desc: 'Cleared a room without using any hints' },
+  speed_demon: { title: 'Speed Demon', desc: 'Cleared a room in under 3 minutes' },
+  puzzle_master: { title: 'Puzzle Master', desc: 'Solved 50 puzzles' },
+  collector: { title: 'Collector', desc: 'Picked up 25 items across your journey' },
+  bookworm: { title: 'Bookworm', desc: 'Read 10 notes or books' },
+  ghost_whisperer: { title: 'Ghost Whisperer', desc: 'Had 10 conversations with spirits' },
+  secret_finder: { title: 'Behind the Walls', desc: 'Discovered a secret room' },
+  light_bearer: { title: 'Light Bearer', desc: 'Banished the presence with your flashlight' },
+  true_ending: { title: 'The Whole Truth', desc: 'Reached the true ending' },
+};
 
 const INTRO_LINES = [
   'You wake to the smell of old paper and candle smoke.',
@@ -272,13 +288,19 @@ export class Game {
   }
 
   async advanceRoom() {
+    // Record mode and room completion
+    progression.recordCompletion(this.rooms.currentKey, difficulty.key);
+
+    const roomName = this.rooms.current?.definition?.name || 'Room';
+    bus.emit('room:cleared:banner', { name: roomName });
+
     const next = this.rooms.nextKey();
     this.stats.rooms_cleared += 1;
 
-    // Achievements
-    this.unlock('first_escape');
-    if (this.stats.rooms_cleared >= 5) this.unlock('half_way');
-    if (this.puzzles.hintsUsed === 0) this.unlock('no_hints');
+    // Achievements (force notify so user always sees the achievement pop-up banner)
+    this.unlock('first_escape', true);
+    if (this.stats.rooms_cleared >= 5) this.unlock('half_way', true);
+    if (this.puzzles.hintsUsed === 0) this.unlock('no_hints', true);
 
     if (!next) return this.finishGame();
 
@@ -398,6 +420,7 @@ export class Game {
 
 
   finishGame() {
+    progression.recordCompletion(this.rooms.currentKey, difficulty.key);
     this.state = 'ending';
     this.player.disable();
     this.setSystemsActive(false);
@@ -479,15 +502,26 @@ export class Game {
 
   // -- achievements & analytics ------------------------------------------
 
-  unlock(code) {
+  unlock(code, force = false) {
     const local = JSON.parse(localStorage.getItem('escape_room_achievements') || '[]');
-    if (local.includes(code)) return;
-    local.push(code);
-    localStorage.setItem('escape_room_achievements', JSON.stringify(local));
-    api.unlockAchievement(code).then((res) => {
-      const title = res.ok ? res.data.unlocked.title : code.replaceAll('_', ' ');
-      bus.emit(Events.ACHIEVEMENT, { title });
-    });
+    const isNew = !local.includes(code);
+    if (isNew) {
+      local.push(code);
+      localStorage.setItem('escape_room_achievements', JSON.stringify(local));
+    }
+
+    if (isNew || force) {
+      const info = ACHIEVEMENT_INFO[code] || {
+        title: code.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        desc: 'Feat accomplished across all runs',
+      };
+
+      bus.emit(Events.ACHIEVEMENT, { code, title: info.title, description: info.desc });
+    }
+
+    if (isNew) {
+      api.unlockAchievement(code);
+    }
   }
 
   track(eventType, payload = {}) {
