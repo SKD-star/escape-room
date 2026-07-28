@@ -9,5 +9,14 @@
     "build": "node scripts/build-netlify.mjs",
     "preview": "vite preview",
     "server": "python server/app.py"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
+    "gsap": "^3.15.0",
+    "postprocessing": "^6.39.3",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "vite": "^8.1.5"
   }
 }
