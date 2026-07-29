@@ -101,6 +101,7 @@
         <button data-view="puzzlebank">Puzzle Bank</button>
         <button data-view="puzzles">Puzzle Analytics</button>
         <button data-view="leaderboard">Leaderboard</button>
+        <button data-view="achievements">Achievements</button>
         <button data-view="ailogs">AI Logs</button>
         <button data-view="events">Event Stream</button>
       </nav>
@@ -174,6 +175,7 @@ async function render(view) {
     else if (view === 'puzzlebank') await renderPuzzleBank();
     else if (view === 'puzzles') await renderPuzzles();
     else if (view === 'leaderboard') await renderLeaderboard();
+    else if (view === 'achievements') await renderAchievements();
     else if (view === 'ailogs') await renderAILogs(1);
     else if (view === 'events') await renderEvents(1);
   } catch (e) { if (e.message !== 'auth') main().innerHTML = '<p class="err">Failed to load.</p>'; }
@@ -472,6 +474,23 @@ async function renderEvents(page) {
     <div class="pager">Page ${data.page} / ${data.pages || 1}
       ${data.page > 1 ? `<button class="act" onclick="renderEvents(${data.page-1})">Prev</button>` : ''}
       ${data.page < data.pages ? `<button class="act" onclick="renderEvents(${data.page+1})">Next</button>` : ''}</div>`;
+}
+
+async function renderAchievements() {
+  const data = await req('/achievements');
+  main().innerHTML = `
+    <h2>Achievements Catalog <span style="font-size:0.8rem;color:var(--fg-3)">· ${data.achievements?.length || 0} total achievements</span></h2>
+    <table><thead><tr><th>Code</th><th>Title</th><th>Description</th><th>Points</th><th>Secret</th><th>Total Unlocks</th></tr></thead>
+    <tbody>${(data.achievements || []).map(a => `
+      <tr>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--accent)">${esc(a.code)}</td>
+        <td style="color:var(--fg);font-weight:600">${esc(a.title)}</td>
+        <td>${esc(a.description)}</td>
+        <td>${a.points} pts</td>
+        <td>${a.secret ? '<span class="pill bad">secret</span>' : '<span class="pill ok">public</span>'}</td>
+        <td><span class="pill ai">${a.unlock_count || 0} unlocks</span></td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--fg-3)">No achievements configured.</td></tr>'}
+    </tbody></table>`;
 }
 
 // boot

@@ -34,6 +34,16 @@ ROOMS = [
 
 ACHIEVEMENTS = [
     ("first_escape", "First Steps", "Escape your first room", "door", 10, False),
+    ("room_1_cleared", "Library Scholar", "Escaped the Haunted Library", "book", 15, False),
+    ("room_2_cleared", "Temple Explorer", "Escaped the Ancient Temple", "key", 15, False),
+    ("room_3_cleared", "Jailbreaker", "Escaped the Forgotten Prison", "door", 15, False),
+    ("room_4_cleared", "Mad Scientist", "Escaped the Abandoned Laboratory", "star", 20, False),
+    ("room_5_cleared", "Discharged", "Escaped the Abandoned Hospital", "cross", 20, False),
+    ("room_6_cleared", "Lord of the Manor", "Escaped the Haunted Mansion", "crown", 25, False),
+    ("room_7_cleared", "King's Ransom", "Escaped the Medieval Castle", "shield", 25, False),
+    ("room_8_cleared", "Bunker Buster", "Escaped the Secret Bunker", "radio", 30, False),
+    ("room_9_cleared", "System Override", "Escaped the Cyber AI Facility", "terminal", 35, False),
+    ("room_10_cleared", "Master Escapist", "Conquered the Final Convergence", "trophy", 50, False),
     ("no_hints", "Purist", "Clear a room without using any hints", "brain", 25, False),
     ("speed_demon", "Speed Demon", "Clear a room in under 3 minutes", "clock", 25, False),
     ("collector", "Collector", "Pick up 25 items across your journey", "bag", 15, False),

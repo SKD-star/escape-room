@@ -11,8 +11,8 @@ from sqlalchemy import func
 
 from extensions import db
 from models import (
-    AILog, AnalyticsEvent, GameSave, LeaderboardEntry,
-    PuzzleBank, PuzzleRecord, RoomMeta, User,
+    AILog, AnalyticsEvent, Achievement, GameSave, LeaderboardEntry,
+    PuzzleBank, PuzzleRecord, RoomMeta, User, UserAchievement,
 )
 from models.puzzle_bank import VALID_TYPES
 from api.security import admin_required
@@ -434,3 +434,14 @@ def events():
         page=page, per_page=30, error_out=False)
     return jsonify({"events": [e.to_dict() for e in rows.items],
                     "pages": rows.pages, "page": page})
+
+
+@bp.get("/api/achievements")
+@admin_required
+def admin_achievements():
+    achievements = Achievement.query.order_by(Achievement.id).all()
+    res = []
+    for a in achievements:
+        unlock_count = UserAchievement.query.filter_by(achievement_id=a.id).count()
+        res.append({**a.to_dict(), "unlock_count": unlock_count})
+    return jsonify({"achievements": res})

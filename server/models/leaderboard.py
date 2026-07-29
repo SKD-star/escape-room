@@ -20,6 +20,7 @@ class LeaderboardEntry(db.Model):
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "username": self.username,
             "completion_time_s": self.completion_time_s,
             "rooms_cleared": self.rooms_cleared,

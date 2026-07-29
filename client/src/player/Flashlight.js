@@ -65,12 +65,34 @@ export class Flashlight {
     this.target = new THREE.Object3D();
     engine.scene.add(this.spot, this.spot.target = this.target, this.fill);
 
+    // Volumetric beam cone mesh for atmospheric light rays
+    const beamRadius = Math.tan(FLASHLIGHT.ANGLE) * 14;
+    const beamGeo = new THREE.ConeGeometry(beamRadius, 14, 24, 1, true);
+    beamGeo.translate(0, -7, 0);
+    beamGeo.rotateX(-Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xfff0d0,
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this.beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    this.beamMesh.visible = false;
+    engine.scene.add(this.beamMesh);
+
     // Lagged aim direction (the "hand" trails the eyes)
     this.aim = new THREE.Vector3(0, 0, -1);
 
     document.addEventListener('keydown', (e) => {
       if (e.code !== 'KeyF' || !this.enabled) return;
       if (this.isHoldingItem()) return; // F throws the held item instead
+      this.toggle();
+    });
+
+    bus.on('flashlight:toggle', () => {
+      if (!this.enabled) return;
       this.toggle();
     });
 
@@ -145,6 +167,13 @@ export class Flashlight {
     this.spot.intensity = intensity;
     this.fill.intensity = this.on ? intensity * 0.02 : 0;
 
+    if (this.beamMesh) {
+      this.beamMesh.visible = this.on && intensity > 0.5;
+      if (this.beamMesh.visible) {
+        this.beamMesh.material.opacity = Math.min(0.22, 0.14 * (intensity / FLASHLIGHT.INTENSITY));
+      }
+    }
+
     if (!this.on) return;
 
     // -- weighty lag: aim eases toward where the camera looks -------------
@@ -157,5 +186,15 @@ export class Flashlight {
     this.fill.position.copy(this.spot.position);
     this.target.position.copy(this.spot.position)
       .addScaledVector(this.aim, FLASHLIGHT.RANGE * 0.8);
+
+    // CRITICAL: Update target matrix world so Three.js SpotLight orientation never gets stale!
+    this.target.updateMatrixWorld();
+
+    // Update volumetric beam orientation
+    if (this.beamMesh) {
+      this.beamMesh.position.copy(this.spot.position);
+      this.beamMesh.lookAt(this.target.position);
+      this.beamMesh.updateMatrixWorld();
+    }
   }
 }

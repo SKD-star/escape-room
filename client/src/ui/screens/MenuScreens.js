@@ -156,18 +156,57 @@ export class AchievementsScreen {
     const res = await api.getAchievements();
     const local = JSON.parse(localStorage.getItem('escape_room_achievements') || '[]');
     let list = res.ok ? res.data.achievements : [];
+
+    // Fallback achievement catalogue for offline / guest mode
+    const FALLBACK_CATALOG = [
+      { code: 'first_escape', title: 'First Steps', description: 'Escaped your first room', points: 10 },
+      { code: 'room_1_cleared', title: 'Library Scholar', description: 'Escaped the Haunted Library', points: 15 },
+      { code: 'room_2_cleared', title: 'Temple Explorer', description: 'Escaped the Ancient Temple', points: 15 },
+      { code: 'room_3_cleared', title: 'Jailbreaker', description: 'Escaped the Forgotten Prison', points: 15 },
+      { code: 'room_4_cleared', title: 'Mad Scientist', description: 'Escaped the Abandoned Laboratory', points: 20 },
+      { code: 'room_5_cleared', title: 'Discharged', description: 'Escaped the Abandoned Hospital', points: 20 },
+      { code: 'room_6_cleared', title: 'Lord of the Manor', description: 'Escaped the Haunted Mansion', points: 25 },
+      { code: 'room_7_cleared', title: 'King\'s Ransom', description: 'Escaped the Medieval Castle', points: 25 },
+      { code: 'room_8_cleared', title: 'Bunker Buster', description: 'Escaped the Secret Bunker', points: 30 },
+      { code: 'room_9_cleared', title: 'System Override', description: 'Escaped the Cyber AI Facility', points: 35 },
+      { code: 'room_10_cleared', title: 'Master Escapist', description: 'Conquered the Final Convergence', points: 50 },
+      { code: 'no_hints', title: 'Purist', description: 'Cleared a room without using any hints', points: 25 },
+      { code: 'speed_demon', title: 'Speed Demon', description: 'Cleared a room in under 3 minutes', points: 25 },
+      { code: 'collector', title: 'Collector', description: 'Picked up 25 items across your journey', points: 15 },
+      { code: 'bookworm', title: 'Bookworm', description: 'Read 10 notes or books', points: 15 },
+      { code: 'half_way', title: 'Halfway to Freedom', description: 'Clear 5 rooms', points: 30 },
+      { code: 'survivor', title: 'Survivor', description: 'Escape all 10 rooms', points: 100 },
+      { code: 'secret_finder', title: 'Behind the Walls', description: 'Discover a secret room', points: 40, secret: true },
+      { code: 'ghost_whisperer', title: 'Ghost Whisperer', description: 'Have 10 conversations with the spirits', points: 20 },
+      { code: 'true_ending', title: 'The Whole Truth', description: 'Reach the true ending', points: 150, secret: true },
+      { code: 'puzzle_master', title: 'Puzzle Master', description: 'Solve 50 puzzles', points: 50 },
+      { code: 'light_bearer', title: 'Light Bearer', description: 'Banish the presence with your flashlight', points: 35, secret: true },
+    ];
+
     if (!list.length) {
-      list = local.map((code) => ({ code, title: code, description: '', unlocked: true, points: 0, secret: false }));
+      list = FALLBACK_CATALOG.map(item => ({
+        ...item,
+        unlocked: local.includes(item.code),
+      }));
+    } else {
+      // Merge local unlocks into server list
+      list = list.map(item => ({
+        ...item,
+        unlocked: item.unlocked || local.includes(item.code),
+      }));
     }
-    if (!list.length) {
-      this.body.innerHTML = '<p style="color:var(--fg-muted);text-align:center;padding:40px">📜 Play online to view the full achievement list.</p>';
-      return;
-    }
+
     const achievementIcons = {
-      first_escape: ICONS.swords, collector: ICONS.key, bookworm: ICONS.book, ghost_whisperer: ICONS.star,
+      first_escape: ICONS.swords,
+      room_1_cleared: ICONS.book, room_2_cleared: ICONS.key, room_3_cleared: ICONS.swords,
+      room_4_cleared: ICONS.star, room_5_cleared: ICONS.star, room_6_cleared: ICONS.crown,
+      room_7_cleared: ICONS.trophy, room_8_cleared: ICONS.medal, room_9_cleared: ICONS.settings,
+      room_10_cleared: ICONS.trophy,
+      collector: ICONS.key, bookworm: ICONS.book, ghost_whisperer: ICONS.star,
       secret_finder: ICONS.star, light_bearer: ICONS.star, survivor: ICONS.medal, true_ending: ICONS.trophy,
       speed_demon: ICONS.star, puzzle_master: ICONS.trophy, no_hints: ICONS.medal, half_way: ICONS.medal,
     };
+
     this.body.innerHTML = '';
     for (const a of list) {
       const hidden = a.secret && !a.unlocked;

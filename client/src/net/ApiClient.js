@@ -102,8 +102,58 @@ class ApiClient {
   // -- game data ----------------------------------------------------------
 
   getRooms() { return this.request('GET', '/rooms', null, { auth: false }); }
-  getLeaderboard() { return this.request('GET', '/leaderboard', null, { auth: false }); }
-  submitRun(run) { return this.request('POST', '/leaderboard', run); }
+
+  async getLeaderboard() {
+    const res = await this.request('GET', '/leaderboard', null, { auth: false });
+    const localRuns = JSON.parse(localStorage.getItem('escape_room_local_leaderboard') || '[]');
+    if (res.ok && Array.isArray(res.data?.leaderboard)) {
+      // Merge local guest runs with server leaderboard entries if needed
+      const serverList = res.data.leaderboard;
+      const combined = [...serverList];
+      for (const loc of localRuns) {
+        if (!combined.some(s => s.username === loc.username && s.score === loc.score)) {
+          combined.push(loc);
+        }
+      }
+      combined.sort((a, b) => b.score - a.score);
+      return { ok: true, status: 200, data: { leaderboard: combined.slice(0, 50) } };
+    }
+    return { ok: true, status: 200, data: { leaderboard: localRuns.slice(0, 50) } };
+  }
+
+  async submitRun(run) {
+    // Calculate local score for guest / offline fallback
+    const _DIFF_MULT = { story: 0.75, normal: 1.0, nightmare: 1.5 };
+    const mult = _DIFF_MULT[run.difficulty] || 1.0;
+    const time_s = Math.max(1, run.completion_time_s || 1);
+    const rooms = Math.max(0, Math.min(10, run.rooms_cleared || 0));
+    const puzzles = Math.max(0, run.puzzles_solved || 0);
+    const hints = Math.max(0, run.hints_used || 0);
+    const score = Math.max(0, Math.floor((rooms * 1000 + puzzles * 250 - Math.floor(time_s / 6) - hints * 100) * mult));
+
+    const localEntry = {
+      username: this.user?.username || 'Guest Escapist',
+      completion_time_s: time_s,
+      rooms_cleared: rooms,
+      puzzles_solved: puzzles,
+      hints_used: hints,
+      ending: run.ending || 'standard',
+      score,
+      date: new Date().toISOString(),
+    };
+
+    // Save to local storage
+    const localRuns = JSON.parse(localStorage.getItem('escape_room_local_leaderboard') || '[]');
+    localRuns.push(localEntry);
+    localRuns.sort((a, b) => b.score - a.score);
+    localStorage.setItem('escape_room_local_leaderboard', JSON.stringify(localRuns.slice(0, 50)));
+
+    if (this.isAuthenticated) {
+      return this.request('POST', '/leaderboard', run);
+    }
+    return { ok: true, status: 201, data: { entry: localEntry, rank: 1 } };
+  }
+
   getAchievements() { return this.request('GET', '/achievements'); }
   unlockAchievement(code) { return this.request('POST', `/achievements/${code}/unlock`); }
   trackEvent(payload) { return this.request('POST', '/analytics', payload); }

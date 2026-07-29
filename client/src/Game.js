@@ -36,6 +36,16 @@ import { lifetimeStats } from './ui/screens/StatsScreen.js';
 
 export const ACHIEVEMENT_INFO = {
   first_escape: { title: 'First Steps', desc: 'Escaped your first room' },
+  room_1_cleared: { title: 'Library Scholar', desc: 'Escaped the Haunted Library' },
+  room_2_cleared: { title: 'Temple Explorer', desc: 'Escaped the Ancient Temple' },
+  room_3_cleared: { title: 'Jailbreaker', desc: 'Escaped the Forgotten Prison' },
+  room_4_cleared: { title: 'Mad Scientist', desc: 'Escaped the Abandoned Laboratory' },
+  room_5_cleared: { title: 'Discharged', desc: 'Escaped the Abandoned Hospital' },
+  room_6_cleared: { title: 'Lord of the Manor', desc: 'Escaped the Haunted Mansion' },
+  room_7_cleared: { title: 'King\'s Ransom', desc: 'Escaped the Medieval Castle' },
+  room_8_cleared: { title: 'Bunker Buster', desc: 'Escaped the Secret Bunker' },
+  room_9_cleared: { title: 'System Override', desc: 'Escaped the Cyber AI Facility' },
+  room_10_cleared: { title: 'Master Escapist', desc: 'Conquered the Final Convergence' },
   half_way: { title: 'Halfway to Freedom', desc: 'Cleared 5 rooms' },
   survivor: { title: 'Survivor', desc: 'Escaped all 10 rooms' },
   no_hints: { title: 'Purist', desc: 'Cleared a room without using any hints' },
@@ -297,8 +307,13 @@ export class Game {
     const next = this.rooms.nextKey();
     this.stats.rooms_cleared += 1;
 
-    // Achievements (force notify so user always sees the achievement pop-up banner)
-    this.unlock('first_escape', true);
+    // Achievements (unlock specific room achievement for the level cleared)
+    const roomList = campaign.list || ROOMS;
+    const roomIndex = roomList.findIndex((r) => r.key === this.rooms.currentKey);
+    const roomLevel = roomIndex >= 0 ? roomIndex + 1 : this.stats.rooms_cleared;
+    this.unlock(`room_${roomLevel}_cleared`, true);
+
+    if (this.stats.rooms_cleared === 1) this.unlock('first_escape', true);
     if (this.stats.rooms_cleared >= 5) this.unlock('half_way', true);
     if (this.puzzles.hintsUsed === 0) this.unlock('no_hints', true);
 

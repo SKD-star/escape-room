@@ -56,54 +56,75 @@ export class DialogueBox {
     this.theme = 'library';
     this.history = [];
     this.isThinking = false;
+    this.customApiKey = localStorage.getItem('escape_room_ai_key') || '';
 
     this.el = html`
       <div id="dialogue-screen" class="backdrop">
-        <div class="dialogue-box glass" style="max-width:620px;width:92%;max-height:85vh;display:flex;flex-direction:column;padding:20px;gap:14px;border-radius:14px">
+        <div class="dialogue-box glass" style="max-width:640px;width:92%;max-height:88vh;display:flex;flex-direction:column;padding:22px;gap:14px;border-radius:16px">
           <!-- Chatbot Header -->
-          <div class="dialogue-header" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-ghost);padding-bottom:12px">
+          <div class="dialogue-header" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-ghost);padding-bottom:14px">
             <div style="display:flex;align-items:center;gap:12px">
-              <div style="font-size:1.6rem;background:rgba(212,175,55,0.15);width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent)">👻</div>
+              <div style="font-size:1.6rem;background:rgba(212,175,55,0.15);width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent);box-shadow:0 0 10px rgba(212,175,55,0.2)">👻</div>
               <div>
-                <div class="npc-name" style="font-family:var(--font-display);font-size:1.25rem;color:var(--fg-primary)">The Librarian</div>
-                <div style="font-size:0.75rem;color:var(--accent);letter-spacing:0.05em">Interactive Room AI Assistant</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="npc-name" style="font-family:var(--font-display);font-size:1.3rem;color:var(--fg-primary);letter-spacing:0.04em">The Librarian</span>
+                  <span class="ai-status-badge" style="font-size:0.68rem;padding:2px 8px;border-radius:12px;background:rgba(74,154,140,0.2);color:#7fc9bc;border:1px solid rgba(74,154,140,0.4)">AI Active</span>
+                </div>
+                <div style="font-size:0.75rem;color:var(--accent);letter-spacing:0.05em">Full Room Companion & Chatbot</div>
               </div>
             </div>
-            <button class="btn btn-icon" data-action="leave" title="Close Dialogue" style="padding:6px 12px;font-size:0.85rem">✕ Leave</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-icon btn-key-toggle" title="Configure AI Key" style="padding:6px 10px;font-size:0.8rem">🔑 AI Key</button>
+              <button class="btn btn-icon" data-action="leave" title="Close Dialogue" style="padding:6px 12px;font-size:0.85rem">✕ Leave</button>
+            </div>
+          </div>
+
+          <!-- API Key Input Panel (Toggleable) -->
+          <div class="ai-key-panel" style="display:none;background:rgba(0,0,0,0.5);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;gap:8px;align-items:center">
+            <input type="password" class="ai-key-input" placeholder="Paste OpenAI API Key (sk-...)" value="${escapeHtml(this.customApiKey)}" style="flex:1;padding:8px 12px;border-radius:6px;background:#0a0a12;border:1px solid var(--border-ghost);color:#fff;font-size:0.82rem;font-family:monospace" />
+            <button class="btn btn-primary btn-save-key" style="padding:8px 14px;font-size:0.8rem">Save Key</button>
           </div>
 
           <!-- Chat Log Container -->
           <div class="dialogue-log" style="flex:1;overflow-y:auto;min-height:220px;max-height:360px;display:flex;flex-direction:column;gap:12px;padding:8px 4px"></div>
 
           <!-- Quick Suggestion Chips -->
-          <div class="dialogue-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0">
-            <button class="chip-btn" data-suggest="What is written in the scroll?">📜 Scroll clue</button>
-            <button class="chip-btn" data-suggest="How do I unlock the exit door?">🔐 Exit lock</button>
-            <button class="chip-btn" data-suggest="Where is the key hidden?">🔑 Hidden key</button>
-          </div>
+          <div class="dialogue-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0"></div>
 
           <!-- Input Area -->
           <div class="dialogue-input" style="display:flex;gap:10px;align-items:center">
-            <input placeholder="Ask the librarian about this room..." maxlength="200" aria-label="Your message to the librarian" style="flex:1;padding:12px 16px;border-radius:8px;background:rgba(0,0,0,0.4);border:1px solid var(--border-ghost);color:#fff;font-family:inherit" />
-            <button class="btn btn-primary" data-action="send" style="padding:12px 20px">Ask</button>
+            <input placeholder="Ask the Librarian anything about this room..." maxlength="250" aria-label="Your message to the librarian" style="flex:1;padding:12px 16px;border-radius:8px;background:rgba(0,0,0,0.4);border:1px solid var(--border-ghost);color:#fff;font-family:inherit" />
+            <button class="btn btn-primary" data-action="send" style="padding:12px 22px">Ask AI</button>
           </div>
         </div>
       </div>`;
 
     this.logEl = this.el.querySelector('.dialogue-log');
     this.input = this.el.querySelector('input');
+    this.suggestionsEl = this.el.querySelector('.dialogue-suggestions');
+    this.keyPanel = this.el.querySelector('.ai-key-panel');
+    this.keyInput = this.el.querySelector('.ai-key-input');
+    this.statusBadge = this.el.querySelector('.ai-status-badge');
 
     this.el.querySelector('[data-action="send"]').addEventListener('click', () => this.send());
     this.el.querySelector('[data-action="leave"]').addEventListener('click', () => this.close());
 
-    this.el.querySelectorAll('.chip-btn').forEach((chip) => {
-      chip.addEventListener('click', () => {
-        const text = chip.dataset.suggest;
-        if (text && !this.isThinking) {
-          this.input.value = text;
-          this.send();
-        }
-      });
+    this.el.querySelector('.btn-key-toggle').addEventListener('click', () => {
+      const isVisible = this.keyPanel.style.display !== 'none';
+      this.keyPanel.style.display = isVisible ? 'none' : 'flex';
+    });
+
+    this.el.querySelector('.btn-save-key').addEventListener('click', () => {
+      this.customApiKey = this.keyInput.value.trim();
+      if (this.customApiKey) {
+        localStorage.setItem('escape_room_ai_key', this.customApiKey);
+        this.statusBadge.textContent = 'Custom AI Key Active';
+        bus.emit(Events.TOAST, { text: 'Custom AI API key saved!' });
+      } else {
+        localStorage.removeItem('escape_room_ai_key');
+        this.statusBadge.textContent = 'AI Active';
+      }
+      this.keyPanel.style.display = 'none';
     });
 
     this.input.addEventListener('keydown', (e) => {
@@ -116,17 +137,66 @@ export class DialogueBox {
     bus.on(Events.DIALOGUE_OPEN, (payload) => this.open(payload));
   }
 
+  updateSuggestions() {
+    const chipsMap = {
+      library: [
+        { text: 'What is written in the scroll?', label: '📜 Scroll Clue' },
+        { text: 'How do I unlock the exit door?', label: '🔐 Exit Lock' },
+        { text: 'Who are you and why are you here?', label: '👻 Who are you?' },
+      ],
+      temple: [
+        { text: 'What order do the serpent idols follow?', label: '🐍 Serpent Ritual' },
+        { text: 'Where is the offering placed?', label: '🕯️ Offering Place' },
+        { text: 'Tell me about the carvings.', label: '🗿 Temple Lore' },
+      ],
+      prison: [
+        { text: 'What do the tally marks on the wall mean?', label: '🔢 Warden\'s Tally' },
+        { text: 'How do I open the cell lock?', label: '🔒 Cell Lock' },
+        { text: 'Where is the warden\'s key?', label: '🔑 Warden Key' },
+      ],
+      default: [
+        { text: 'What clue is hidden in this room?', label: '🔍 Room Clue' },
+        { text: 'How do I solve the current lock?', label: '🔐 Lock Solution' },
+        { text: 'Give me a subtle hint.', label: '💡 Nudge' },
+      ],
+    };
+
+    const chips = chipsMap[this.theme] || chipsMap.default;
+    this.suggestionsEl.innerHTML = chips.map((c) => `
+      <button class="chip-btn" data-suggest="${escapeHtml(c.text)}">${escapeHtml(c.label)}</button>
+    `).join('');
+
+    this.suggestionsEl.querySelectorAll('.chip-btn').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const text = chip.dataset.suggest;
+        if (text && !this.isThinking) {
+          this.input.value = text;
+          this.send();
+        }
+      });
+    });
+  }
+
   open({ npc, theme, greeting }) {
     this.npc = npc || 'The Librarian';
     this.theme = theme || 'library';
     this.history = [];
     this.isThinking = false;
     this.logEl.innerHTML = '';
+    this.customApiKey = localStorage.getItem('escape_room_ai_key') || '';
+    this.keyInput.value = this.customApiKey;
+
+    if (this.customApiKey) {
+      this.statusBadge.textContent = 'Custom AI Key Active';
+    } else {
+      this.statusBadge.textContent = 'AI Active';
+    }
 
     this.el.querySelector('.npc-name').textContent = this.npc;
+    this.updateSuggestions();
     screens.show('dialogue');
 
-    const initialGreeting = greeting || 'Shhh. Ask what you will about this room — quietly.';
+    const initialGreeting = greeting || 'Shhh... Ask what you will about this room — quiet, now.';
     this.appendMessage('assistant', initialGreeting);
     setTimeout(() => this.input.focus(), 100);
   }
@@ -135,7 +205,7 @@ export class DialogueBox {
     const isUser = role === 'user';
     const msgEl = html`
       <div class="chat-msg ${isUser ? 'chat-user' : 'chat-npc'}"
-           style="display:flex;flex-direction:column;align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:82%;background:${isUser ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.06)'};border:1px solid ${isUser ? 'var(--accent)' : 'var(--border-ghost)'};padding:10px 14px;border-radius:${isUser ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}">
+           style="display:flex;flex-direction:column;align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:85%;background:${isUser ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.06)'};border:1px solid ${isUser ? 'var(--accent)' : 'var(--border-ghost)'};padding:10px 14px;border-radius:${isUser ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}">
         <div style="font-size:0.7rem;color:var(--fg-muted);margin-bottom:4px;font-weight:600">${isUser ? 'You' : this.npc}</div>
         <div class="msg-text" style="font-size:0.92rem;line-height:1.5;color:var(--fg-primary)"></div>
       </div>`;
@@ -175,9 +245,15 @@ export class DialogueBox {
     this.logEl.appendChild(thinkingEl);
     this.scrollToBottom();
 
-    const res = await api.aiDialogue({
-      npc: this.npc, theme: this.theme, message, history: this.history,
-    });
+    const payload = {
+      npc: this.npc,
+      theme: this.theme,
+      message,
+      history: this.history,
+    };
+    if (this.customApiKey) payload.api_key = this.customApiKey;
+
+    const res = await api.aiDialogue(payload);
 
     thinkingEl.remove();
     this.isThinking = false;

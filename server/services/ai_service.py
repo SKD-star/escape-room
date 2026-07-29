@@ -25,24 +25,30 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _client = None
+_client_key = None
 
 
-def _openai():
-    global _client
-    if _client is None:
+def _openai(custom_key: str | None = None):
+    global _client, _client_key
+    key = (custom_key or "").strip() or current_app.config.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        raise ValueError("No OpenAI API key provided.")
+    if _client is None or _client_key != key:
         from openai import OpenAI
-        _client = OpenAI(api_key=current_app.config["OPENAI_API_KEY"])
+        _client = OpenAI(api_key=key)
+        _client_key = key
     return _client
 
 
-def _openai_enabled() -> bool:
-    return bool(current_app.config["OPENAI_API_KEY"])
+def _openai_enabled(custom_key: str | None = None) -> bool:
+    key = (custom_key or "").strip() or current_app.config.get("OPENAI_API_KEY", "").strip()
+    return bool(key)
 
 
-def _chat_json(system: str, user: str, max_tokens: int = 700) -> dict:
+def _chat_json(system: str, user: str, max_tokens: int = 700, custom_key: str | None = None) -> dict:
     """One JSON-mode chat completion."""
-    resp = _openai().chat.completions.create(
-        model=current_app.config["OPENAI_MODEL"],
+    resp = _openai(custom_key).chat.completions.create(
+        model=current_app.config.get("OPENAI_MODEL", "gpt-4o-mini"),
         response_format={"type": "json_object"},
         max_tokens=max_tokens,
         temperature=0.9,
@@ -270,7 +276,8 @@ def generate_hint(puzzle: dict, tier: int, user_id: int | None = None) -> dict:
 
 def generate_dialogue(npc: str, room_theme: str, player_message: str,
                       history: list[dict] | None = None,
-                      user_id: int | None = None) -> dict:
+                      user_id: int | None = None,
+                      api_key: str | None = None) -> dict:
     npc = (npc or "The Librarian")[:48]
     room_theme = (room_theme or "library")[:32]
     clean_msg = (player_message or "").strip()
@@ -291,8 +298,8 @@ def generate_dialogue(npc: str, room_theme: str, player_message: str,
         for h in (history or [])[-6:]:
             messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:400]})
         messages.append({"role": "user", "content": clean_msg[:400]})
-        resp = _openai().chat.completions.create(
-            model=current_app.config["OPENAI_MODEL"],
+        resp = _openai(api_key).chat.completions.create(
+            model=current_app.config.get("OPENAI_MODEL", "gpt-4o-mini"),
             response_format={"type": "json_object"},
             max_tokens=180, temperature=0.9, messages=messages,
         )
@@ -327,6 +334,17 @@ def generate_dialogue(npc: str, room_theme: str, player_message: str,
             mood = "calm"
 
         return {"line": line, "mood": mood}
+
+    # If an explicit API key was provided, force OpenAI attempt
+    if api_key and api_key.strip():
+        try:
+            start = time.monotonic()
+            result = via_openai()
+            result["provider"] = "openai"
+            _log("dialogue", "openai", f"npc:{npc}", result, int((time.monotonic() - start) * 1000), user_id)
+            return result
+        except Exception as exc:
+            log.warning("OpenAI custom key dialogue failed: %s", exc)
 
     return _run("dialogue", f"npc:{npc}", via_openai, fallback, user_id)
 
