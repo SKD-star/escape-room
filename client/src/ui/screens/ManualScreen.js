@@ -21,6 +21,7 @@ const CONTROLS = [
   ['F', 'Flashlight (throws a held item instead)'],
   ['R', 'Reset a held item’s rotation'],
   ['Tab', 'Inventory'],
+  ['T', 'Talk to the room’s spirit — ask it anything, anywhere'],
   ['J', 'Journal — every note you have read'],
   ['Q', 'Objective reminder'],
   ['P', 'Photo mode — save a clean screenshot'],

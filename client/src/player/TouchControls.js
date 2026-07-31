@@ -19,6 +19,15 @@ const JOY_RADIUS = 56;   // px travel of the thumb from centre
 const MOVE_THRESHOLD = 0.34;
 const LOOK_SENS = 0.0042; // radians per px, scaled by mouseSensitivity
 
+// Battery ring geometry (viewBox is 0 0 100 100, stroke centred on r=44)
+const RING_R = 44;
+const RING_C = 2 * Math.PI * RING_R;
+
+/** Short haptic tick — silently ignored where the API is unavailable. */
+function haptic(ms) {
+  try { navigator.vibrate?.(ms); } catch { /* unsupported */ }
+}
+
 export class TouchControls {
   /**
    * @param {import('./FPSController.js').FPSController} player
@@ -57,13 +66,32 @@ export class TouchControls {
         <div class="tc-joy-thumb"></div>
       </div>
       <div class="tc-actions">
-        <button class="tc-btn tc-torch" data-tc="torch" aria-label="Flashlight">🔦</button>
+        <button class="tc-btn tc-torch" data-tc="torch" aria-label="Flashlight"
+                aria-pressed="false" role="switch">
+          <svg class="tc-torch-ring" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <circle class="tc-ring-track" cx="50" cy="50" r="${RING_R}"></circle>
+            <circle class="tc-ring-fill" cx="50" cy="50" r="${RING_R}"
+                    stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="0"></circle>
+          </svg>
+          <svg class="tc-torch-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="tc-torch-body"
+                  d="M9.2 8.6h5.6l-.55 10.1a2.25 2.25 0 0 1-2.25 2.15h-.05a2.25 2.25 0 0 1-2.25-2.15Z"/>
+            <path class="tc-torch-head" d="M7.4 4.1h9.2l-1.5 4.1H8.9Z"/>
+            <g class="tc-torch-rays">
+              <path d="M12 1.2v1.6"/>
+              <path d="M6.6 2.6 7.5 4"/>
+              <path d="M17.4 2.6 16.5 4"/>
+            </g>
+          </svg>
+          <span class="tc-torch-pct" aria-hidden="true">100</span>
+        </button>
         <button class="tc-btn tc-jump" data-tc="jump" aria-label="Jump">JUMP</button>
         <button class="tc-btn tc-sprint" data-tc="sprint" aria-label="Sprint">RUN</button>
         <button class="tc-btn tc-crouch" data-tc="crouch" aria-label="Crouch">CROUCH</button>
         <button class="tc-btn tc-interact" data-tc="interact" aria-label="Interact">E</button>
       </div>
       <div class="tc-top-btns">
+        <button class="tc-btn tc-mini tc-talk" data-tc="talk" aria-label="Ask the Librarian">💬</button>
         <button class="tc-btn tc-mini" data-tc="inventory" aria-label="Inventory">🎒</button>
         <button class="tc-btn tc-mini" data-tc="pause" aria-label="Menu">☰</button>
       </div>
@@ -86,10 +114,37 @@ export class TouchControls {
     this.joyThumb = el.querySelector('.tc-joy-thumb');
     this.lookLayer = el.querySelector('.tc-look');
 
+    this.torchBtn = el.querySelector('.tc-torch');
+    this.torchRing = el.querySelector('.tc-ring-fill');
+    this.torchPct = el.querySelector('.tc-torch-pct');
+
     this.bindJoystick();
     this.bindLook();
     this.bindButtons();
+    this.bindTorchState();
     this.hide();
+  }
+
+  /**
+   * Mirror the real flashlight onto the button: the ring is the remaining
+   * charge, the glyph lights when the beam is live, and the whole control
+   * goes red-dead when the cell is flat — so the player never has to guess.
+   */
+  bindTorchState() {
+    const apply = ({ on, battery }) => {
+      const charge = Math.max(0, Math.min(1, battery ?? 0));
+      this.torchRing.style.strokeDashoffset = String(RING_C * (1 - charge));
+      this.torchPct.textContent = String(Math.round(charge * 100));
+      this.torchBtn.classList.toggle('on', Boolean(on));
+      this.torchBtn.classList.toggle('low', charge > 0 && charge < 0.25);
+      this.torchBtn.classList.toggle('dead', charge <= 0);
+      this.torchBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      this.torchBtn.setAttribute(
+        'aria-label', `Flashlight ${on ? 'on' : 'off'} — ${Math.round(charge * 100)} percent charge`,
+      );
+    };
+    bus.on('flashlight:state', apply);
+    apply({ on: this.flashlight.on, battery: 1 });
   }
 
   // -- left joystick → virtual WASD (like the gamepad left stick) ----------
@@ -207,8 +262,22 @@ export class TouchControls {
 
     on('[data-tc="interact"]', (down) => { if (down) this.interactions.interact(); });
     on('[data-tc="torch"]', (down) => {
-      if (down && this.flashlight.enabled && !this.interactions.inspecting) this.flashlight.toggle();
+      if (!down) return;
+      if (!this.flashlight.enabled || this.interactions.inspecting) return;
+      const wasOn = this.flashlight.on;
+      const dead = this.flashlight.battery <= 0;
+      this.flashlight.toggle();
+      if (dead) {
+        // Nothing happened — say so with a stutter instead of a silent tap.
+        this.torchBtn.classList.remove('reject');
+        void this.torchBtn.offsetWidth;   // restart the animation
+        this.torchBtn.classList.add('reject');
+        haptic([14, 40, 14]);
+      } else {
+        haptic(wasOn ? 10 : 18);
+      }
     });
+    on('[data-tc="talk"]', (down) => { if (down) bus.emit('librarian:open'); });
     on('[data-tc="jump"]', (down) => this.setKey('Space', down), true);
     on('[data-tc="sprint"]', (down) => this.setKey('ShiftLeft', down), true);
     on('[data-tc="crouch"]', (down) => {

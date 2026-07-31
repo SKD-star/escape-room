@@ -71,9 +71,23 @@ class Config:
         else {}
     )
 
-    # AI
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    # AI — any OpenAI-compatible provider (OpenRouter, OpenAI, Groq, …).
+    # OpenRouter keys (sk-or-…) are detected automatically and routed to the
+    # free model pool, so the game needs no paid account.
+    AI_API_KEY = (
+        os.getenv("AI_API_KEY", "")
+        or os.getenv("OPENROUTER_API_KEY", "")
+        or os.getenv("OPENAI_API_KEY", "")
+    ).strip()
+    AI_BASE_URL = os.getenv("AI_BASE_URL", "").strip()      # blank → inferred from key
+    AI_MODEL = os.getenv("AI_MODEL", "").strip()            # blank → provider default chain
+    # Sent to OpenRouter for its public app rankings (harmless elsewhere).
+    AI_SITE_URL = os.getenv("AI_SITE_URL", "http://localhost:5173").strip()
+    AI_SITE_NAME = os.getenv("AI_SITE_NAME", "AI Powered Escape Room").strip()
+
+    # Legacy aliases — older code/docs still reference these names.
+    OPENAI_API_KEY = AI_API_KEY
+    OPENAI_MODEL = AI_MODEL
 
     # Email (forgot password)
     EMAIL_HOST = os.getenv("EMAIL_HOST", "")

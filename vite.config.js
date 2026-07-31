@@ -9,6 +9,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   root: 'client',
   publicDir: 'public',
+  // .env lives at the repo root (shared with the Flask server), not in client/.
+  envDir: process.cwd(),
   server: {
     port: 3000,
     // Bind to all interfaces so LAN devices AND public tunnels

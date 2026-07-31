@@ -67,14 +67,19 @@ Before starting, ensure you have the following software installed:
    pip install -r requirements.txt
    ```
 
-4. Set your Environment Variables:
-   ```bash
-   # Windows (PowerShell)
-   $env:OPENAI_API_KEY="your_openai_api_key_here"
+4. Set your Environment Variables. Copy `.env.example` to `.env` at the repo
+   root and fill in your AI key — a **free** OpenRouter key (no credit card)
+   is all the Librarian chatbot needs:
 
-   # Linux / macOS
-   export OPENAI_API_KEY="your_openai_api_key_here"
+   ```bash
+   # Grab a key at https://openrouter.ai/keys  ->  sk-or-v1-...
+   AI_API_KEY=sk-or-v1-your_free_key_here    # server-side (Flask)
+   VITE_AI_KEY=sk-or-v1-your_free_key_here   # browser build (static hosting)
    ```
+
+   `sk-or-…` keys are auto-routed to OpenRouter's $0 model pool; a paid
+   `sk-proj-…` OpenAI key works in the same slot. Free models are capped at
+   roughly 20 requests/minute and 50/day per key, shared by everyone playing.
 
 5. Seed the local SQLite database:
    ```bash
@@ -87,7 +92,7 @@ Before starting, ensure you have the following software installed:
    ```
    *Backend API runs at `http://localhost:5000`.*
 
-> 💡 **Note**: The client automatically features a **built-in procedural offline fallback**. If the backend server or OpenAI API key is unavailable, the game will seamlessly generate puzzles and dialogues locally without throwing errors.
+> 💡 **Note**: The client automatically features a **built-in procedural offline fallback**. If the backend server or the AI key is unavailable, the game will seamlessly generate puzzles and dialogues locally without throwing errors — the Librarian just switches to its offline voice.
 
 ---
 
@@ -99,7 +104,13 @@ Before starting, ensure you have the following software installed:
 2. Set the following build settings:
    - **Build Command**: `npm run build`
    - **Publish Directory**: `dist`
-3. Click **Deploy Site**.
+3. Under **Site settings → Environment variables**, add:
+   - `VITE_AI_KEY`: your free `sk-or-v1-…` key from https://openrouter.ai/keys
+
+   Without it the Librarian still talks, but only through its offline voice —
+   there is no backend on Netlify, so the browser needs its own key. The value
+   is compiled into the public JS bundle, so use a **free, zero-spend key only**.
+4. Click **Deploy Site**.
 
 *Alternatively, deploy via CLI:*
 ```bash
@@ -132,7 +143,7 @@ netlify deploy --build --prod
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `gunicorn app:app` (or `python app.py`)
 4. Add Environment Variables:
-   - `OPENAI_API_KEY`: `your_openai_api_key_here`
+   - `AI_API_KEY`: your free `sk-or-v1-…` key from https://openrouter.ai/keys
    - `FLASK_ENV`: `production`
 
 ---

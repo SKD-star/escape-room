@@ -54,6 +54,7 @@ def dialogue():
     if not message:
         return jsonify({"error": "message required"}), 400
     history = data.get("history")
+    context = data.get("context")
     custom_key = str(data.get("api_key", "")).strip() or request.headers.get("X-AI-Key", "").strip()
     result = ai_service.generate_dialogue(
         str(data.get("npc", "The Librarian"))[:48],
@@ -62,6 +63,7 @@ def dialogue():
         history=history if isinstance(history, list) else None,
         user_id=g.user.id if g.user else None,
         api_key=custom_key or None,
+        context=context if isinstance(context, dict) else None,
     )
     return jsonify(result)
 

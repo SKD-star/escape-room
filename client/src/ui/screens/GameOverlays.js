@@ -8,7 +8,7 @@
  */
 import gsap from 'gsap';
 import { bus, Events } from '../../core/EventBus.js';
-import { api } from '../../net/ApiClient.js';
+import { aiClient } from '../../ai/AIClient.js';
 import { html, screens } from '../ScreenManager.js';
 import { escapeHtml, formatTime } from './MenuScreens.js';
 
@@ -49,224 +49,335 @@ export class NoteReader {
 // Dialogue with AI NPC
 // ---------------------------------------------------------------------------
 
+const CHAT_STORE_KEY = 'escape_room_chat_v1';
+const CHAT_MAX_TURNS = 40;   // per conversation, kept on disk
+
+/** Opening lines used when a spirit is met for the first time in a room. */
+const DEFAULT_GREETINGS = {
+  library: 'Shhh. The books are listening. Ask what you must — quietly.',
+  temple: 'You walk on holy stone. Speak, and the stone will hear you.',
+  prison: 'Another one in the block. Ask your questions before the count.',
+  laboratory: 'Subject unregistered. State your query; I still keep the logs.',
+  hospital: 'Visiting hours ended a long time ago. Ask anyway.',
+  mansion: 'The house is awake now. Ask, and mind which room you ask it in.',
+  castle: 'You stand in the hall of oaths. Speak plainly, I have no patience left.',
+  bunker: 'Channel open. Nobody has spoken on it in decades. Go ahead.',
+  cyber: 'Session established. Query me — I have run out of anything else to process.',
+  boss: 'You came all this way to ask questions. Ask, then.',
+};
+
+/**
+ * DialogueBox — the room spirit as a full chatbot.
+ *
+ * Free-text conversation with the AI backend (falling back to the player's own
+ * OpenAI key, then to the offline engine in AIClient). Every turn carries the
+ * live room state — mechanism, clue, inventory, objective, battery, sanity —
+ * so answers are about *this* room at *this* moment, and the transcript
+ * persists per room so the spirit remembers what you already asked it.
+ */
 export class DialogueBox {
-  constructor(onClose) {
+  /**
+   * @param {() => void} onClose
+   * @param {() => object} getContext supplies the live room state each turn
+   */
+  constructor(onClose, getContext = () => ({})) {
     this.onClose = onClose;
+    this.getContext = getContext;
     this.npc = 'The Librarian';
     this.theme = 'library';
     this.history = [];
     this.isThinking = false;
-    this.customApiKey = localStorage.getItem('escape_room_ai_key') || '';
+    this.transcripts = this.loadTranscripts();
+    // Legacy: players used to paste their own key here. The game now ships
+    // with a free one, so drop any stale key left on the device.
+    localStorage.removeItem('escape_room_ai_key');
 
     this.el = html`
       <div id="dialogue-screen" class="backdrop">
-        <div class="dialogue-box glass" style="max-width:640px;width:92%;max-height:88vh;display:flex;flex-direction:column;padding:22px;gap:14px;border-radius:16px">
-          <!-- Chatbot Header -->
-          <div class="dialogue-header" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-ghost);padding-bottom:14px">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div style="font-size:1.6rem;background:rgba(212,175,55,0.15);width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid var(--accent);box-shadow:0 0 10px rgba(212,175,55,0.2)">👻</div>
+        <div class="dialogue-box glass">
+          <!-- Chatbot header -->
+          <div class="dialogue-header">
+            <div class="dialogue-identity">
+              <div class="npc-avatar" aria-hidden="true">👻</div>
               <div>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <span class="npc-name" style="font-family:var(--font-display);font-size:1.3rem;color:var(--fg-primary);letter-spacing:0.04em">The Librarian</span>
-                  <span class="ai-status-badge" style="font-size:0.68rem;padding:2px 8px;border-radius:12px;background:rgba(74,154,140,0.2);color:#7fc9bc;border:1px solid rgba(74,154,140,0.4)">AI Active</span>
+                <div class="npc-title-row">
+                  <span class="npc-name">The Librarian</span>
+                  <span class="ai-status-badge" title="Where the answers are coming from">AI Active</span>
                 </div>
-                <div style="font-size:0.75rem;color:var(--accent);letter-spacing:0.05em">Full Room Companion & Chatbot</div>
+                <div class="npc-subtitle">Room companion — ask anything, freely</div>
               </div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn btn-icon btn-key-toggle" title="Configure AI Key" style="padding:6px 10px;font-size:0.8rem">🔑 AI Key</button>
-              <button class="btn btn-icon" data-action="leave" title="Close Dialogue" style="padding:6px 12px;font-size:0.85rem">✕ Leave</button>
+            <div class="dialogue-tools">
+              <button class="btn btn-icon btn-clear-chat" title="Forget this conversation">↺</button>
+              <button class="btn btn-icon" data-action="leave" title="Close (Esc)">✕</button>
             </div>
           </div>
 
-          <!-- API Key Input Panel (Toggleable) -->
-          <div class="ai-key-panel" style="display:none;background:rgba(0,0,0,0.5);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;gap:8px;align-items:center">
-            <input type="password" class="ai-key-input" placeholder="Paste OpenAI API Key (sk-...)" value="${escapeHtml(this.customApiKey)}" style="flex:1;padding:8px 12px;border-radius:6px;background:#0a0a12;border:1px solid var(--border-ghost);color:#fff;font-size:0.82rem;font-family:monospace" />
-            <button class="btn btn-primary btn-save-key" style="padding:8px 14px;font-size:0.8rem">Save Key</button>
+          <!-- Transcript -->
+          <div class="dialogue-log" role="log" aria-live="polite"></div>
+
+          <!-- Follow-up chips, refreshed from every answer -->
+          <div class="dialogue-suggestions"></div>
+
+          <!-- Composer -->
+          <div class="dialogue-input">
+            <textarea class="chat-input" rows="1" maxlength="500" spellcheck="false"
+                      aria-label="Your message to the room spirit"
+                      placeholder="Ask anything about this room…"></textarea>
+            <button class="btn btn-primary btn-send" data-action="send" aria-label="Send">
+              <span class="send-label">Ask</span>
+            </button>
           </div>
-
-          <!-- Chat Log Container -->
-          <div class="dialogue-log" style="flex:1;overflow-y:auto;min-height:220px;max-height:360px;display:flex;flex-direction:column;gap:12px;padding:8px 4px"></div>
-
-          <!-- Quick Suggestion Chips -->
-          <div class="dialogue-suggestions" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0"></div>
-
-          <!-- Input Area -->
-          <div class="dialogue-input" style="display:flex;gap:10px;align-items:center">
-            <input placeholder="Ask the Librarian anything about this room..." maxlength="250" aria-label="Your message to the librarian" style="flex:1;padding:12px 16px;border-radius:8px;background:rgba(0,0,0,0.4);border:1px solid var(--border-ghost);color:#fff;font-family:inherit" />
-            <button class="btn btn-primary" data-action="send" style="padding:12px 22px">Ask AI</button>
+          <div class="dialogue-foot">
+            <span><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Esc</kbd> leave</span>
           </div>
         </div>
       </div>`;
 
     this.logEl = this.el.querySelector('.dialogue-log');
-    this.input = this.el.querySelector('input');
+    this.input = this.el.querySelector('.chat-input');
+    this.sendBtn = this.el.querySelector('.btn-send');
     this.suggestionsEl = this.el.querySelector('.dialogue-suggestions');
-    this.keyPanel = this.el.querySelector('.ai-key-panel');
-    this.keyInput = this.el.querySelector('.ai-key-input');
     this.statusBadge = this.el.querySelector('.ai-status-badge');
 
-    this.el.querySelector('[data-action="send"]').addEventListener('click', () => this.send());
+    this.sendBtn.addEventListener('click', () => this.send());
     this.el.querySelector('[data-action="leave"]').addEventListener('click', () => this.close());
-
-    this.el.querySelector('.btn-key-toggle').addEventListener('click', () => {
-      const isVisible = this.keyPanel.style.display !== 'none';
-      this.keyPanel.style.display = isVisible ? 'none' : 'flex';
-    });
-
-    this.el.querySelector('.btn-save-key').addEventListener('click', () => {
-      this.customApiKey = this.keyInput.value.trim();
-      if (this.customApiKey) {
-        localStorage.setItem('escape_room_ai_key', this.customApiKey);
-        this.statusBadge.textContent = 'Custom AI Key Active';
-        bus.emit(Events.TOAST, { text: 'Custom AI API key saved!' });
-      } else {
-        localStorage.removeItem('escape_room_ai_key');
-        this.statusBadge.textContent = 'AI Active';
-      }
-      this.keyPanel.style.display = 'none';
-    });
+    this.el.querySelector('.btn-clear-chat').addEventListener('click', () => this.clearConversation());
 
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
-      if (e.key === 'Enter') this.send();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        this.send();
+      }
       if (e.key === 'Escape') this.close();
+    });
+    // Grow the composer with the message, up to a sane ceiling.
+    this.input.addEventListener('input', () => {
+      this.input.style.height = 'auto';
+      this.input.style.height = `${Math.min(120, this.input.scrollHeight)}px`;
     });
 
     screens.register('dialogue', this.el);
-    bus.on(Events.DIALOGUE_OPEN, (payload) => this.open(payload));
+    bus.on(Events.DIALOGUE_OPEN, (payload) => this.open(payload || {}));
   }
 
-  updateSuggestions() {
-    const chipsMap = {
-      library: [
-        { text: 'What is written in the scroll?', label: '📜 Scroll Clue' },
-        { text: 'How do I unlock the exit door?', label: '🔐 Exit Lock' },
-        { text: 'Who are you and why are you here?', label: '👻 Who are you?' },
-      ],
-      temple: [
-        { text: 'What order do the serpent idols follow?', label: '🐍 Serpent Ritual' },
-        { text: 'Where is the offering placed?', label: '🕯️ Offering Place' },
-        { text: 'Tell me about the carvings.', label: '🗿 Temple Lore' },
-      ],
-      prison: [
-        { text: 'What do the tally marks on the wall mean?', label: '🔢 Warden\'s Tally' },
-        { text: 'How do I open the cell lock?', label: '🔒 Cell Lock' },
-        { text: 'Where is the warden\'s key?', label: '🔑 Warden Key' },
-      ],
-      default: [
-        { text: 'What clue is hidden in this room?', label: '🔍 Room Clue' },
-        { text: 'How do I solve the current lock?', label: '🔐 Lock Solution' },
-        { text: 'Give me a subtle hint.', label: '💡 Nudge' },
-      ],
-    };
+  // -- persistence --------------------------------------------------------
 
-    const chips = chipsMap[this.theme] || chipsMap.default;
-    this.suggestionsEl.innerHTML = chips.map((c) => `
-      <button class="chip-btn" data-suggest="${escapeHtml(c.text)}">${escapeHtml(c.label)}</button>
-    `).join('');
-
-    this.suggestionsEl.querySelectorAll('.chip-btn').forEach((chip) => {
-      chip.addEventListener('click', () => {
-        const text = chip.dataset.suggest;
-        if (text && !this.isThinking) {
-          this.input.value = text;
-          this.send();
-        }
-      });
-    });
+  /** @returns {Record<string, Array<{role:string, content:string}>>} */
+  loadTranscripts() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CHAT_STORE_KEY) || '{}');
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+      return {};
+    }
   }
+
+  get conversationKey() { return `${this.theme}::${this.npc}`; }
+
+  saveTranscript() {
+    this.transcripts[this.conversationKey] = this.history.slice(-CHAT_MAX_TURNS);
+    try {
+      localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(this.transcripts));
+    } catch { /* quota — the in-memory transcript still works this session */ }
+  }
+
+  clearConversation() {
+    this.history = [];
+    delete this.transcripts[this.conversationKey];
+    this.saveTranscript();
+    this.logEl.innerHTML = '';
+    this.appendMessage('assistant', this.greetingFor(this.theme));
+    this.renderSuggestions(this.defaultSuggestions());
+    this.input.focus();
+  }
+
+  greetingFor(theme) {
+    const key = Object.keys(DEFAULT_GREETINGS).find((k) => String(theme).includes(k));
+    return DEFAULT_GREETINGS[key] || 'Ask what you will about this room. I have nothing but time.';
+  }
+
+  // -- open / close -------------------------------------------------------
 
   open({ npc, theme, greeting }) {
     this.npc = npc || 'The Librarian';
     this.theme = theme || 'library';
-    this.history = [];
     this.isThinking = false;
-    this.logEl.innerHTML = '';
-    this.customApiKey = localStorage.getItem('escape_room_ai_key') || '';
-    this.keyInput.value = this.customApiKey;
+    this.el.querySelector('.npc-name').textContent = this.npc;
+    this.setStatus('idle');
 
-    if (this.customApiKey) {
-      this.statusBadge.textContent = 'Custom AI Key Active';
+    // Resume the transcript for this room instead of starting cold.
+    this.history = Array.isArray(this.transcripts[this.conversationKey])
+      ? this.transcripts[this.conversationKey].slice(-CHAT_MAX_TURNS)
+      : [];
+    this.logEl.innerHTML = '';
+
+    if (this.history.length) {
+      for (const turn of this.history) this.appendMessage(turn.role, turn.content, { instant: true });
+      this.appendSystemLine('— you spoke with this one before —', true);
     } else {
-      this.statusBadge.textContent = 'AI Active';
+      this.appendMessage('assistant', greeting || this.greetingFor(this.theme));
     }
 
-    this.el.querySelector('.npc-name').textContent = this.npc;
-    this.updateSuggestions();
+    this.renderSuggestions(this.defaultSuggestions());
     screens.show('dialogue');
-
-    const initialGreeting = greeting || 'Shhh... Ask what you will about this room — quiet, now.';
-    this.appendMessage('assistant', initialGreeting);
     setTimeout(() => this.input.focus(), 100);
   }
 
-  appendMessage(role, text) {
+  close() {
+    this.saveTranscript();
+    screens.hide('dialogue');
+    this.onClose?.();
+  }
+
+  // -- rendering ----------------------------------------------------------
+
+  setStatus(state) {
+    const map = {
+      idle: ['AI Active', 'ok'],
+      thinking: ['Listening…', 'busy'],
+      openrouter: ['AI Active', 'ok'],
+      openai: ['AI Active', 'ok'],
+      server: ['AI Active', 'ok'],
+      offline: ['Offline Voice', 'warn'],
+      error: ['Connection Lost', 'warn'],
+    };
+    const [label, cls] = map[state] || map.idle;
+    this.statusBadge.textContent = label;
+    this.statusBadge.className = `ai-status-badge ${cls}`;
+  }
+
+  appendMessage(role, text, { instant = false } = {}) {
     const isUser = role === 'user';
     const msgEl = html`
-      <div class="chat-msg ${isUser ? 'chat-user' : 'chat-npc'}"
-           style="display:flex;flex-direction:column;align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:85%;background:${isUser ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.06)'};border:1px solid ${isUser ? 'var(--accent)' : 'var(--border-ghost)'};padding:10px 14px;border-radius:${isUser ? '14px 14px 2px 14px' : '14px 14px 14px 2px'}">
-        <div style="font-size:0.7rem;color:var(--fg-muted);margin-bottom:4px;font-weight:600">${isUser ? 'You' : this.npc}</div>
-        <div class="msg-text" style="font-size:0.92rem;line-height:1.5;color:var(--fg-primary)"></div>
+      <div class="chat-msg ${isUser ? 'chat-user' : 'chat-npc'}">
+        <div class="chat-who">${escapeHtml(isUser ? 'You' : this.npc)}</div>
+        <div class="msg-text"></div>
       </div>`;
 
     const textEl = msgEl.querySelector('.msg-text');
     this.logEl.appendChild(msgEl);
     this.scrollToBottom();
 
-    if (isUser) {
-      textEl.textContent = text;
-    } else {
-      this.typewrite(textEl, text);
-    }
+    if (isUser || instant) textEl.textContent = text;
+    else this.typewrite(textEl, text);
+    return msgEl;
+  }
+
+  appendSystemLine(text, muted = false) {
+    const el = html`<div class="chat-system${muted ? ' muted' : ''}">${escapeHtml(text)}</div>`;
+    this.logEl.appendChild(el);
+    this.scrollToBottom();
+    return el;
+  }
+
+  defaultSuggestions() {
+    const ctx = this.safeContext();
+    const list = ['What should I be looking at?'];
+    if (ctx?.puzzle?.type) list.push('How does this mechanism work?');
+    if (ctx?.needed_key) list.push('Where is the key hidden?');
+    else list.push('What opens the way out?');
+    list.push('Who are you?');
+    return list.slice(0, 4);
+  }
+
+  renderSuggestions(list) {
+    const chips = (list || []).filter(Boolean).slice(0, 4);
+    this.suggestionsEl.innerHTML = chips
+      .map((t) => `<button class="chip-btn" data-suggest="${escapeHtml(t)}">${escapeHtml(t)}</button>`)
+      .join('');
+    this.suggestionsEl.querySelectorAll('.chip-btn').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if (this.isThinking) return;
+        this.input.value = chip.dataset.suggest;
+        this.send();
+      });
+    });
   }
 
   scrollToBottom() {
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
+  /** Context provider must never break a conversation. */
+  safeContext() {
+    try {
+      return this.getContext?.() || {};
+    } catch (err) {
+      console.warn('[DialogueBox] context provider failed', err);
+      return {};
+    }
+  }
+
+  // -- the conversation turn ----------------------------------------------
+
   async send() {
     const message = this.input.value.trim();
     if (!message || this.isThinking) return;
 
     this.input.value = '';
-    this.isThinking = true;
+    this.input.style.height = 'auto';
+    this.setThinking(true);
 
-    // Display user message in chat stream
     this.appendMessage('user', message);
     this.history.push({ role: 'user', content: message });
 
-    // Show thinking indicator
     const thinkingEl = html`
-      <div class="chat-msg chat-npc thinking-msg" style="align-self:flex-start;background:rgba(255,255,255,0.06);border:1px solid var(--border-ghost);padding:10px 14px;border-radius:14px 14px 14px 2px">
-        <div style="font-size:0.7rem;color:var(--fg-muted);margin-bottom:4px">${this.npc}</div>
-        <div style="font-size:0.9rem;color:var(--accent);font-style:italic">Consulting room archives…</div>
+      <div class="chat-msg chat-npc thinking-msg">
+        <div class="chat-who">${escapeHtml(this.npc)}</div>
+        <div class="typing-dots" aria-label="thinking"><span></span><span></span><span></span></div>
       </div>`;
     this.logEl.appendChild(thinkingEl);
     this.scrollToBottom();
 
-    const payload = {
-      npc: this.npc,
-      theme: this.theme,
-      message,
-      history: this.history,
-    };
-    if (this.customApiKey) payload.api_key = this.customApiKey;
-
-    const res = await api.aiDialogue(payload);
+    let reply;
+    try {
+      reply = await aiClient.getDialogue(
+        this.npc,
+        this.theme,
+        message,
+        this.history.slice(0, -1),   // prior turns only; the message is sent separately
+        this.safeContext(),
+      );
+    } catch (err) {
+      console.warn('[DialogueBox] turn failed', err);
+      reply = null;
+    }
 
     thinkingEl.remove();
-    this.isThinking = false;
+    this.setThinking(false);
 
-    const line = res.ok && res.data?.line
-      ? res.data.line
-      : 'The room whispers back: Observe the items and notes around you for your answer.';
+    if (!reply?.line) {
+      this.setStatus('error');
+      const failEl = this.appendSystemLine('The voice did not reach you. Tap to try again.');
+      failEl.classList.add('chat-retry');
+      failEl.addEventListener('click', () => {
+        failEl.remove();
+        this.history.pop();               // drop the unanswered turn
+        this.input.value = message;
+        this.send();
+      });
+      return;
+    }
 
-    this.history.push({ role: 'assistant', content: line });
-    this.appendMessage('assistant', line);
+    this.setStatus(reply.provider === 'fallback' || reply.provider === 'offline' ? 'offline' : 'idle');
+    this.history.push({ role: 'assistant', content: reply.line });
+    this.saveTranscript();
+    this.appendMessage('assistant', reply.line);
+    this.renderSuggestions(reply.suggestions?.length ? reply.suggestions : this.defaultSuggestions());
 
     bus.emit(Events.PLAY_SOUND, { name: 'whisper' });
     bus.emit('dialogue:exchanged');
+  }
+
+  setThinking(on) {
+    this.isThinking = on;
+    this.sendBtn.disabled = on;
+    this.input.disabled = on;
+    this.el.querySelector('.send-label').textContent = on ? '…' : 'Ask';
+    if (on) this.setStatus('thinking');
+    if (!on) setTimeout(() => this.input.focus(), 30);
   }
 
   typewrite(targetEl, text) {
@@ -276,18 +387,13 @@ export class DialogueBox {
     const obj = { i: 0 };
     gsap.to(obj, {
       i: chars.length,
-      duration: Math.min(2.0, chars.length * 0.025),
+      duration: Math.min(2.0, chars.length * 0.018),
       ease: 'none',
       onUpdate: () => {
         targetEl.textContent = chars.slice(0, Math.floor(obj.i)).join('');
         this.scrollToBottom();
       },
     });
-  }
-
-  close() {
-    screens.hide('dialogue');
-    this.onClose?.();
   }
 }
 

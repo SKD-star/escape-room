@@ -4,6 +4,7 @@
  * dialogue work even with no backend at all.
  */
 import { api } from '../net/ApiClient.js';
+import { AI_APP_TITLE, AI_BASE_URL, AI_KEY, AI_MODELS } from './aiConfig.js';
 
 const LOCAL_RIDDLES = [
   { riddle: 'I have keys but open no locks. I have space but no room. You can enter, but you can\'t go outside.', answer: 'keyboard' },
@@ -227,10 +228,281 @@ export const aiClient = {
     };
   },
 
-  /** @returns {Promise<string>} dialogue line */
-  async getDialogue(npc, theme, message, history) {
-    const res = await api.aiDialogue({ npc, theme, message, history });
-    if (res.ok && res.data?.line) return res.data.line;
-    return `Observe the items and notes in this room carefully.`;
+  /**
+   * Full chatbot turn for the room spirit.
+   *
+   * Three tiers, in order: the game server (which holds the .env key), a
+   * direct browser call on the built-in free key (so the static Netlify build
+   * talks to a real model too), then the offline engine below. The player is
+   * never asked for a key — the free one is always there.
+   *
+   * @returns {Promise<{line: string, mood?: string, suggestions?: string[], provider: string}>}
+   */
+  async getDialogue(npc, theme, message, history = [], context = {}) {
+    const res = await api.aiDialogue({ npc, theme, message, history, context });
+    if (res.ok && res.data?.line && res.data.provider !== 'fallback') {
+      return { ...res.data, provider: res.data.provider || 'server' };
+    }
+
+    const direct = await directDialogue(npc, theme, message, history, context);
+    if (direct) return direct;
+
+    // The server's own procedural answer still beats ours if we got one.
+    if (res.ok && res.data?.line) return { ...res.data, provider: 'fallback' };
+    return localDialogue(npc, theme, message, history, context);
   },
 };
+
+// ---------------------------------------------------------------------------
+// Tier 2 — direct browser → OpenRouter free models, on the key baked into the
+// build. Runs whenever the backend is unreachable or keyless (static hosting),
+// which is the normal case for the deployed game.
+// ---------------------------------------------------------------------------
+
+const MOODS = new Set(['calm', 'ominous', 'helpful', 'amused']);
+
+async function directDialogue(npc, theme, message, history, context) {
+  if (!AI_KEY) return null;
+  const system =
+    `You are '${npc}', the resident spirit and guide of the ${String(theme).replace(/_/g, ' ')} ` +
+    'in a horror escape-room game. You are a full conversational companion, not a menu of canned ' +
+    'lines: the player types freely and you answer them directly.\n' +
+    'Answer the actual question first, using the LIVE ROOM STATE below, and never repeat a ' +
+    'sentence you have already used. You may discuss the room, its objects and lore, the ' +
+    'mechanism, the notes, carried items, the presence that hunts them, the flashlight and sanity, ' +
+    'and your own history; questions about the real world get turned back to the room in character. ' +
+    'Be genuinely useful but make them work: point them at what to observe, narrow it if they are ' +
+    'still stuck, and if they plainly demand the answer give only the first element and tell them ' +
+    'to earn the rest — never write the full solution verbatim. Hushed, archaic, faintly ' +
+    'threatening, 2-4 sentences, no emoji or markdown. Always write in English, including ' +
+    'the suggestions.\n\n' +
+    `LIVE ROOM STATE:\n${describeContext(theme, context)}\n\n` +
+    'Reply with NOTHING but a single JSON object — no prose, no code fence: ' +
+    '{"line": str, "mood": "calm"|"ominous"|"helpful"|"amused", ' +
+    '"suggestions": [2-3 follow-up questions, each under 6 words]}.';
+
+  const messages = [{ role: 'system', content: system }];
+  for (const h of (history || []).slice(-16)) {
+    messages.push({
+      role: h.role === 'assistant' ? 'assistant' : 'user',
+      content: String(h.content ?? '').slice(0, 600),
+    });
+  }
+  messages.push({ role: 'user', content: String(message).slice(0, 600) });
+
+  // Walk the model chain: a delisted or rate-limited free model hands off to
+  // the next one rather than dropping the player back to the offline voice.
+  for (const model of AI_MODELS) {
+    try {
+      const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${AI_KEY}`,
+          'HTTP-Referer': window.location.origin,
+          'X-Title': AI_APP_TITLE,
+        },
+        body: JSON.stringify({
+          model,
+          // 700, not 420: the free reasoning models burn a chunk of the budget
+          // thinking, and a truncated reply is unparseable JSON.
+          max_tokens: 700,
+          temperature: 0.85,
+          presence_penalty: 0.5,
+          frequency_penalty: 0.35,
+          messages,
+        }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const parsed = parseModelJson(data.choices?.[0]?.message?.content);
+      if (!parsed?.line) continue;
+      return {
+        line: String(parsed.line),
+        // Free models write prose here ("eerie and mysterious"); the UI only
+        // understands the four moods it asked for.
+        mood: MOODS.has(parsed.mood) ? parsed.mood : 'calm',
+        suggestions: Array.isArray(parsed.suggestions)
+          ? parsed.suggestions.slice(0, 3).map((s) => String(s).slice(0, 48))
+          : [],
+        provider: 'openrouter',
+        model,
+      };
+    } catch {
+      // Network hiccup on this model — try the next.
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse a reply that is *supposed* to be JSON. Free models routinely ignore
+ * the instruction and wrap the object in a ```json fence or a <think> block,
+ * so peel those off before giving up on an otherwise good answer.
+ */
+function parseModelJson(content) {
+  let text = String(content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const braced = text.match(/\{[\s\S]*\}/);
+    if (!braced) return null;
+    try {
+      return JSON.parse(braced[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Flatten the live room state into the briefing both AI tiers read. */
+function describeContext(theme, context = {}) {
+  const ctx = context || {};
+  const lines = [`Room theme: ${theme}.`];
+  if (ctx.room_name) lines.push(`Room name: ${ctx.room_name} (chapter ${ctx.chapter ?? '?'}).`);
+  if (ctx.objective) lines.push(`Player's current objective: ${ctx.objective}`);
+
+  const p = ctx.puzzle || {};
+  if (p.type) {
+    lines.push(`Room mechanism: a ${p.type} titled '${p.title || 'the mechanism'}'.`);
+    if (p.clue) lines.push(`The clue the player already has: ${String(p.clue).slice(0, 600)}`);
+    if (p.riddle) lines.push(`The riddle inscribed: ${String(p.riddle).slice(0, 300)}`);
+    if (p.solution) lines.push(`SECRET SOLUTION (never state it verbatim): ${String(p.solution).slice(0, 120)}`);
+    lines.push(`Mechanism solved already: ${p.solved ? 'yes' : 'no'}.`);
+  }
+  lines.push(ctx.inventory?.length
+    ? `Player is carrying: ${ctx.inventory.slice(0, 12).join(', ')}.`
+    : 'Player is carrying nothing yet.');
+  if (ctx.needed_key) lines.push(`The exit door still needs: ${ctx.needed_key}.`);
+  if (ctx.landmarks?.length) lines.push(`Notable things in this room: ${ctx.landmarks.slice(0, 14).join(', ')}.`);
+
+  const status = [];
+  if (ctx.sanity != null) status.push(`sanity ${Math.round(ctx.sanity * 100)}%`);
+  if (ctx.battery != null) {
+    status.push(`flashlight battery ${Math.round(ctx.battery * 100)}% (${ctx.flashlight_on ? 'on' : 'off'})`);
+  }
+  if (ctx.time_in_room_s != null) status.push(`${Math.round(ctx.time_in_room_s)}s spent in this room`);
+  if (ctx.failed_attempts) status.push(`${ctx.failed_attempts} failed mechanism attempts`);
+  if (ctx.hints_used) status.push(`${ctx.hints_used} hints spent`);
+  if (status.length) lines.push(`Player status: ${status.join(', ')}.`);
+  if (ctx.difficulty) lines.push(`Difficulty mode: ${ctx.difficulty}.`);
+  if (ctx.rooms_cleared != null) lines.push(`Rooms cleared so far: ${ctx.rooms_cleared} of 10.`);
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Tier 3 — offline conversation engine. Not a canned-line table: it reads the
+// same live room state, remembers what it has already said, and escalates its
+// guidance the harder the player pushes.
+// ---------------------------------------------------------------------------
+
+const TOPIC_WORDS = {
+  mechanism: ['code', 'number', 'digit', 'keypad', 'lock', 'combination', 'password', 'sequence',
+    'symbol', 'order', 'ritual', 'riddle', 'answer', 'solve', 'puzzle', 'mechanism', 'panel'],
+  exit: ['door', 'exit', 'escape', 'leave', 'key', 'unlock', 'gate', 'open'],
+  items: ['item', 'carry', 'inventory', 'holding', 'pick', 'collected', 'bag'],
+  search: ['where', 'look', 'search', 'find', 'hidden', 'secret', 'behind', 'under'],
+  self: ['who are you', 'your name', 'ghost', 'spirit', 'librarian', 'keeper', 'dead', 'alive'],
+  survival: ['dark', 'sanity', 'light', 'flashlight', 'torch', 'battery', 'presence', 'haunt',
+    'monster', 'afraid', 'scared', 'timer', 'following', 'watching', 'chasing', 'alone', 'safe'],
+  lore: ['story', 'history', 'happened', 'lore', 'before', 'past', 'built', 'why'],
+  stuck: ['stuck', 'help', 'hint', 'clue', 'nudge', 'lost', 'confused', 'no idea'],
+};
+
+const PRESSURE_WORDS = ['just tell', 'tell me the', 'give me the', 'what is the code',
+  'what is the answer', 'spoil', 'i give up', 'straight answer'];
+
+function topicOf(msg) {
+  let best = 'open';
+  let bestHits = 0;
+  for (const [topic, words] of Object.entries(TOPIC_WORDS)) {
+    const hits = words.reduce((n, w) => n + (msg.includes(w) ? 1 : 0), 0);
+    if (hits > bestHits) { bestHits = hits; best = topic; }
+  }
+  return best;
+}
+
+function localDialogue(npc, theme, message, history = [], context = {}) {
+  const msg = String(message || '').toLowerCase();
+  const place = String(theme).replace(/_/g, ' ');
+  const ctx = context || {};
+  const p = ctx.puzzle || {};
+  const clue = String(p.clue || '').trim();
+  const solution = String(p.solution || '').trim();
+  const asks = history.filter((h) => h.role === 'user').length;
+  const demanding = PRESSURE_WORDS.some((w) => msg.includes(w));
+  // Each renewed demand buys one more element — never the whole answer.
+  const demands = 1 + history.filter(
+    (h) => h.role === 'user' && PRESSURE_WORDS.some((w) => String(h.content).toLowerCase().includes(w)),
+  ).length;
+  const said = new Set(history.filter((h) => h.role === 'assistant').map((h) => h.content));
+  const topic = topicOf(msg);
+
+  /** The first `count` elements of the solution, capped below the full answer. */
+  const revealed = (count) => {
+    if (!solution) return '';
+    let parts = solution.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+    if (parts.length === 1) parts = [...solution];
+    const keep = Math.max(1, Math.min(count, parts.length - 1));
+    return parts.slice(0, keep).join(' ');
+  };
+
+  let line;
+  let mood = 'helpful';
+
+  if (topic === 'mechanism' || topic === 'stuck') {
+    const head = revealed(demands);
+    if (demanding && head) {
+      const rest = demands < 2 ? 'The rest' : 'What still follows';
+      line = `You would have it handed to you? Then take this much and no more: it begins with '${head}'. ${rest} you will earn from the ${place} itself.`;
+      mood = 'ominous';
+    } else if (asks >= 3 && clue) {
+      line = `Then stop reading and start counting. ${clue.replace(/\n/g, ' ').slice(0, 220)} Take them strictly in the order they are named.`;
+    } else if (clue) {
+      line = `The ${place} already told you how. Recall the inscription: "${clue.split('\n')[0].slice(0, 140)}" — every line of it names something you can touch.`;
+    } else {
+      line = `The mechanism answers to the ${place}, not to me. Walk it slowly and count what repeats — the room never places a thing twice by accident.`;
+    }
+  } else if (topic === 'exit') {
+    line = ctx.needed_key
+      ? `The door will not part for empty hands. It wants the ${String(ctx.needed_key).replace(/_/g, ' ')} — search where the room hides its shame: behind, beneath, above.`
+      : 'You hold what the door asked for. Feed the mechanism its answer and the way out will remember it was ever a door.';
+  } else if (topic === 'items') {
+    line = ctx.inventory?.length
+      ? `You carry ${ctx.inventory.join(', ')}. Each of those was left for a reason — turn them over.`
+      : 'You carry nothing yet. Empty hands open nothing here; search the corners first.';
+    mood = 'calm';
+  } else if (topic === 'search') {
+    line = ctx.landmarks?.length
+      ? `Look to ${ctx.landmarks.slice(0, 3).join(', ')} — the room keeps its secrets in plain arrangement.`
+      : `Search the edges of the ${place}. What is hidden is always beside what is obvious.`;
+  } else if (topic === 'self') {
+    line = `I am ${npc}. I stayed when the rest were carried out, and I have watched every visitor since decide the ${place} was smarter than they were. So far, they were right.`;
+    mood = 'calm';
+  } else if (topic === 'survival') {
+    line = (ctx.battery != null && ctx.battery < 0.3)
+      ? 'Your light is nearly spent — I can hear it thinning. Burn it only where you must look; the dark takes your reason faster than it takes your body.'
+      : 'Keep the beam lit while you search. Light steadies the mind, and what walks these halls dislikes being seen almost as much as it dislikes being ignored.';
+    mood = 'ominous';
+  } else if (topic === 'lore') {
+    line = `This ${place} was not built to hold you. It was built to ask something, and it has been asking a long time. You are simply the first in a while to answer.`;
+    mood = 'calm';
+  } else {
+    const subject = String(message || '').trim().replace(/\?+$/, '').slice(0, 60) || 'your question';
+    line = `"${subject}" — the ${place} has an answer for that, though it will not say it plainly. Tell me what you have already searched and I will tell you what you have missed.`;
+    mood = 'calm';
+  }
+
+  if (said.has(line)) {
+    line = `I have said my piece on that. Ask me something the ${place} has not already answered — what have you touched since we last spoke?`;
+    mood = 'amused';
+  }
+
+  let suggestions = ['What should I count?', 'Where is the key?', 'Who were you?'];
+  if (topic === 'mechanism') suggestions = ['I am still stuck.', 'Which objects exactly?', 'What is this place?'];
+  else if (topic === 'exit') suggestions = ['Where is it hidden?', 'What opens the lock?', 'Is something following me?'];
+
+  return { line, mood, suggestions, provider: 'offline' };
+}

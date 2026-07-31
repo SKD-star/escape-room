@@ -30,7 +30,7 @@ import { settings } from './config/settings.js';
 import { difficulty } from './config/difficulty.js';
 import { progression } from './player/ProgressionManager.js';
 import { campaign } from './config/campaign.js';
-import { ROOMS } from './config/constants.js';
+import { ROOMS, FLASHLIGHT } from './config/constants.js';
 import { screens } from './ui/ScreenManager.js';
 import { lifetimeStats } from './ui/screens/StatsScreen.js';
 
@@ -87,6 +87,7 @@ export class Game {
     this.saves = new SaveManager(this);
 
     this.flags = {}; // story flags: secrets found, dialogue counts, etc.
+    this.roomEnteredAt = 0; // wall clock stamp, fed to the AI companion
   }
 
   freshStats() {
@@ -587,6 +588,11 @@ export class Game {
       this.levelTimer.frozen = true; // talking is optional — pause the clock
       this.pause(true);
     });
+
+    // Summon the room spirit from anywhere (T key / touch chat button), so the
+    // companion is a chatbot you can always reach, not a one-off prop.
+    bus.on('librarian:open', () => this.openLibrarian());
+    bus.on(Events.ROOM_ENTERED, () => { this.roomEnteredAt = performance.now(); });
     bus.on('dialogue:exchanged', () => {
       this.stats.dialogues += 1;
       if (this.stats.dialogues >= 10) this.unlock('ghost_whisperer');
@@ -651,6 +657,10 @@ export class Game {
           this.ui.journal.close();
         }
       }
+      if (e.code === 'KeyT') {
+        if (this.state === 'playing') this.openLibrarian();
+        else if (screens.current === 'dialogue') this.ui.dialogue?.close();
+      }
       if (e.code === 'KeyR') {
         if (this.attemptsTracker.exhausted || screens.current === 'room-locked') {
           screens.hide('room-locked');
@@ -668,5 +678,91 @@ export class Game {
         }
       }
     });
+  }
+
+  // -- room companion (AI chatbot) ----------------------------------------
+
+  /** The spirit that answers in each theme. */
+  static SPIRITS = {
+    library: 'The Librarian',
+    temple: 'The Keeper',
+    prison: 'Prisoner 47',
+    laboratory: 'Dr. Halvorsen',
+    hospital: 'The Night Nurse',
+    mansion: 'The Lady',
+    castle: 'The Undying King',
+    bunker: 'The Operator',
+    cyber: 'PROCESS_0',
+    boss: 'The Convergence',
+  };
+
+  /** Open the chatbot for whichever spirit haunts the current room. */
+  openLibrarian() {
+    if (this.state !== 'playing') return;
+    const theme = this.rooms.current?.definition?.theme || 'library';
+    bus.emit(Events.DIALOGUE_OPEN, {
+      npc: Game.SPIRITS[theme] || 'The Librarian',
+      theme,
+    });
+  }
+
+  /**
+   * Live room state handed to the chatbot on every turn. This is what makes
+   * the companion answer about *this* room right now instead of guessing:
+   * the mechanism and its clue, what the player carries, what the door still
+   * wants, what is interactable, and how the run is going.
+   */
+  chatContext() {
+    const def = this.rooms?.current?.definition ?? {};
+    const room = this.rooms?.current;
+    const puzzle = this.puzzles?.puzzle ?? null;
+
+    // The literal answer travels with a "never say it verbatim" instruction —
+    // it lets the spirit grade its hints instead of bluffing.
+    let solution = '';
+    if (puzzle) {
+      if (puzzle.code) solution = String(puzzle.code);
+      else if (Array.isArray(puzzle.sequence)) solution = puzzle.sequence.join(' ');
+      else if (puzzle.answer) solution = String(puzzle.answer);
+    }
+
+    const landmarks = [];
+    for (const obj of this.interactions?.interactables ?? []) {
+      const label = obj?.userData?.interactable?.label;
+      if (label && !landmarks.includes(label)) landmarks.push(label);
+    }
+
+    return {
+      room_name: def.name,
+      chapter: def.chapter,
+      brief: def.brief,
+      objective: this.puzzles?.solved
+        ? 'The mechanism is solved — reach the exit.'
+        : 'Find the clues in the room and solve the mechanism.',
+      puzzle: puzzle ? {
+        type: puzzle.type,
+        title: puzzle.title,
+        clue: puzzle.clue,
+        riddle: puzzle.riddle,
+        solution,
+        solved: Boolean(this.puzzles?.solved),
+      } : null,
+      inventory: (this.inventory?.items ?? []).map((i) => i.name),
+      needed_key: room?.requiredKeyItem ? room.requiredKeyItem.replaceAll('_', ' ') : '',
+      landmarks: landmarks.slice(0, 14),
+      notes: (this.ui.journal?.entries ?? [])
+        .filter((e) => e.roomKey === this.rooms?.currentKey)
+        .map((e) => `${e.title}: ${e.body}`),
+      sanity: this.sanity?.ratio,
+      battery: this.flashlight ? this.flashlight.battery / FLASHLIGHT.BATTERY_MAX : null,
+      flashlight_on: Boolean(this.flashlight?.on),
+      time_in_room_s: this.roomEnteredAt
+        ? Math.round((performance.now() - this.roomEnteredAt) / 1000)
+        : 0,
+      failed_attempts: this.puzzles?.attempts ?? 0,
+      hints_used: this.puzzles?.hintsUsed ?? 0,
+      difficulty: difficulty.mode?.label,
+      rooms_cleared: this.stats.rooms_cleared,
+    };
   }
 }

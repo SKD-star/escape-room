@@ -83,7 +83,9 @@ async function boot() {
     onSave: (slot) => game.saves.save(slot, 'manual'),
   });
   new NoteReader(() => game.resume());
-  new DialogueBox(() => game.resume());
+  // The companion reads the live room state every turn, so it is wired to the
+  // game rather than constructed blind.
+  game.ui.dialogue = new DialogueBox(() => game.resume(), () => game.chatContext());
   new ObjectivesScreen();
 
   // -- boot the engine ----------------------------------------------------

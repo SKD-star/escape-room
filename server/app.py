@@ -44,7 +44,10 @@ def create_app(config_class=Config) -> Flask:
         return jsonify({
             "status": "ok",
             "database": app.config["SQLALCHEMY_DATABASE_URI"].split(":")[0],
-            "ai": "openai" if app.config["OPENAI_API_KEY"] else "fallback",
+            "ai": (
+                ("openrouter" if app.config["AI_API_KEY"].startswith("sk-or-") else "openai")
+                if app.config["AI_API_KEY"] else "fallback"
+            ),
         })
 
     @app.errorhandler(404)
